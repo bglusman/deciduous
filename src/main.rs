@@ -151,12 +151,17 @@ fn main() {
             if args.verbose {
                 if let Some(ref details) = r.spectral_details {
                     eprintln!(
-                        "    Spectral: full={:.1}dB high={:.1}dB upper={:.1}dB | drops: high={:.1} upper={:.1}",
+                        "    Spectral: full={:.1}dB high={:.1}dB upper={:.1}dB ultrasonic={:.1}dB",
                         details.rms_full,
                         details.rms_high,
                         details.rms_upper,
-                        details.high_drop,
-                        details.upper_drop
+                        details.rms_ultrasonic
+                    );
+                    eprintln!(
+                        "    Drops: upper={:.1}dB ultrasonic={:.1}dB | flatness_19-21k={:.3}",
+                        details.upper_drop,
+                        details.ultrasonic_drop,
+                        details.ultrasonic_flatness
                     );
                 }
                 if let Some(ref details) = r.binary_details {

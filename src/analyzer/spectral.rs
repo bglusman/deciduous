@@ -27,10 +27,18 @@ pub struct SpectralDetails {
     pub rms_high: f64,
     /// RMS level of 17-20kHz band (dB)
     pub rms_upper: f64,
+    /// RMS level of 19-20kHz band (dB)
+    pub rms_19_20k: f64,
+    /// RMS level of 20-22kHz band (dB) - ultrasonic, key for 320k detection
+    pub rms_ultrasonic: f64,
     /// Drop from full to high band (dB)
     pub high_drop: f64,
     /// Drop from mid-high to upper band (dB)
     pub upper_drop: f64,
+    /// Drop from 19-20kHz to 20-22kHz (dB) - key for 320k detection
+    pub ultrasonic_drop: f64,
+    /// Spectral flatness in 19-21kHz (1.0 = noise-like, 0.0 = tonal/empty)
+    pub ultrasonic_flatness: f64,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -143,6 +151,29 @@ fn decode_audio(data: &[u8]) -> Option<(Vec<f64>, u32)> {
     Some((samples, sample_rate))
 }
 
+/// Calculate spectral flatness (Wiener entropy)
+/// Returns 1.0 for white noise, 0.0 for pure tone or silence
+fn spectral_flatness(magnitudes: &[f64]) -> f64 {
+    if magnitudes.is_empty() {
+        return 0.0;
+    }
+
+    let n = magnitudes.len() as f64;
+
+    // Geometric mean (via log to avoid underflow)
+    let log_sum: f64 = magnitudes.iter().map(|&x| (x + 1e-10).ln()).sum();
+    let geo_mean = (log_sum / n).exp();
+
+    // Arithmetic mean
+    let arith_mean: f64 = magnitudes.iter().sum::<f64>() / n;
+
+    if arith_mean <= 0.0 {
+        return 0.0;
+    }
+
+    geo_mean / arith_mean
+}
+
 /// Calculate energy in a frequency band using FFT results
 fn band_energy(fft_result: &[Complex<f64>], sample_rate: u32, low_hz: u32, high_hz: u32) -> f64 {
     let bin_resolution = sample_rate as f64 / FFT_SIZE as f64;
@@ -189,6 +220,11 @@ pub fn analyze(data: &[u8], _declared_sample_rate: u32) -> SpectralResult {
     let mut avg_mid_high = 0.0;
     let mut avg_high = 0.0;
     let mut avg_upper = 0.0;
+    let mut avg_19_20k = 0.0;
+    let mut avg_ultrasonic = 0.0;
+
+    // For spectral flatness calculation
+    let mut ultrasonic_magnitudes: Vec<f64> = Vec::new();
 
     for i in 0..num_windows {
         let start = i * hop_size;
@@ -213,6 +249,16 @@ pub fn analyze(data: &[u8], _declared_sample_rate: u32) -> SpectralResult {
         avg_mid_high += band_energy(&buffer, sample_rate, 10000, 15000);
         avg_high += band_energy(&buffer, sample_rate, 15000, 20000);
         avg_upper += band_energy(&buffer, sample_rate, 17000, 20000);
+        avg_19_20k += band_energy(&buffer, sample_rate, 19000, 20000);
+        avg_ultrasonic += band_energy(&buffer, sample_rate, 20000, 22000);
+
+        // Collect magnitudes in 19-21kHz for flatness calculation
+        let bin_resolution = sample_rate as f64 / FFT_SIZE as f64;
+        let low_bin = (19000.0 / bin_resolution) as usize;
+        let high_bin = (21000.0 / bin_resolution).min((FFT_SIZE / 2) as f64) as usize;
+        for bin in low_bin..=high_bin.min(buffer.len() - 1) {
+            ultrasonic_magnitudes.push(buffer[bin].norm());
+        }
     }
 
     let num_windows = num_windows.max(1) as f64;
@@ -220,16 +266,25 @@ pub fn analyze(data: &[u8], _declared_sample_rate: u32) -> SpectralResult {
     avg_mid_high /= num_windows;
     avg_high /= num_windows;
     avg_upper /= num_windows;
+    avg_19_20k /= num_windows;
+    avg_ultrasonic /= num_windows;
 
     // Convert to dB
     result.details.rms_full = to_db(avg_full);
     result.details.rms_mid_high = to_db(avg_mid_high);
     result.details.rms_high = to_db(avg_high);
     result.details.rms_upper = to_db(avg_upper);
+    result.details.rms_19_20k = to_db(avg_19_20k);
+    result.details.rms_ultrasonic = to_db(avg_ultrasonic);
 
     // Calculate drops (positive = high band is quieter, which is normal)
     result.details.high_drop = result.details.rms_full - result.details.rms_high;
     result.details.upper_drop = result.details.rms_mid_high - result.details.rms_upper;
+    result.details.ultrasonic_drop = result.details.rms_19_20k - result.details.rms_ultrasonic;
+
+    // Calculate spectral flatness in 19-21kHz range
+    // Flatness = geometric_mean / arithmetic_mean (1.0 = white noise, 0.0 = pure tone/silence)
+    result.details.ultrasonic_flatness = spectral_flatness(&ultrasonic_magnitudes);
 
     // Score based on analysis
     // Tuned to detect lossy origins in "lossless" files
@@ -257,6 +312,37 @@ pub fn analyze(data: &[u8], _declared_sample_rate: u32) -> SpectralResult {
         result.flags.push("possible_lossy_origin".to_string());
     }
 
+    // === 320k DETECTION ===
+    // MP3 320k cuts at ~20kHz, leaving no content above that
+    // Real lossless has content extending to 21-22kHz
+    //
+    // Key metrics from analysis:
+    // - Real lossless: ultrasonic_drop ~1-2 dB, flatness ~0.98
+    // - Fake 320k: ultrasonic_drop ~50+ dB, flatness ~0.10
+
+    // Massive cliff at 20kHz - strong indicator of 320k transcode
+    if result.details.ultrasonic_drop > 40.0 {
+        result.score += 35;
+        result.flags.push("cliff_at_20khz".to_string());
+    } else if result.details.ultrasonic_drop > 25.0 {
+        result.score += 25;
+        result.flags.push("steep_20khz_cutoff".to_string());
+    } else if result.details.ultrasonic_drop > 15.0 {
+        result.score += 15;
+        result.flags.push("possible_320k_origin".to_string());
+    }
+
+    // Low spectral flatness in 19-21kHz = empty/dead band
+    // Real audio has noise-like content (flatness ~0.9+)
+    // 320k transcode has almost nothing (flatness <0.5)
+    if result.details.ultrasonic_flatness < 0.3 {
+        result.score += 20;
+        result.flags.push("dead_ultrasonic_band".to_string());
+    } else if result.details.ultrasonic_flatness < 0.5 {
+        result.score += 10;
+        result.flags.push("weak_ultrasonic_content".to_string());
+    }
+
     // Steep overall rolloff (full spectrum to 15-20kHz)
     if result.details.high_drop > 48.0 {
         result.score += 15;
@@ -267,6 +353,12 @@ pub fn analyze(data: &[u8], _declared_sample_rate: u32) -> SpectralResult {
     if result.details.rms_upper < -50.0 {
         result.score += 15;
         result.flags.push("silent_17k+".to_string());
+    }
+
+    // Very quiet ultrasonic band (absolute check)
+    if result.details.rms_ultrasonic < -70.0 {
+        result.score += 10;
+        result.flags.push("silent_20k+".to_string());
     }
 
     result
