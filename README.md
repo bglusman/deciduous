@@ -2,10 +2,20 @@
 
 Detect "lossless" audio files that were actually created from lossy sources.
 
+## Download
+
+| Platform | Download |
+|----------|----------|
+| macOS Apple Silicon | [losselot-darwin-arm64](https://github.com/notactuallytreyanastasio/losselot/releases/download/v0.1.0/losselot-darwin-arm64) |
+| macOS Intel | [losselot-darwin-amd64](https://github.com/notactuallytreyanastasio/losselot/releases/download/v0.1.0/losselot-darwin-amd64) |
+| Linux x86_64 | [losselot-linux-amd64](https://github.com/notactuallytreyanastasio/losselot/releases/download/v0.1.0/losselot-linux-amd64) |
+| Windows x86_64 | [losselot-windows-amd64.exe](https://github.com/notactuallytreyanastasio/losselot/releases/download/v0.1.0/losselot-windows-amd64.exe) |
+
+**No dependencies** - just download, `chmod +x`, and run.
+
 ## Quick Start
 
 ```bash
-# Download for your platform from Releases, then:
 chmod +x losselot-*
 ./losselot-darwin-arm64 examples/suspect.mp3
 ```
@@ -58,45 +68,26 @@ Losselot performs **spectral analysis** to measure energy in different frequency
 | MP3 → MP3 transcode | Detected via spectral + LAME header analysis |
 | Real lossless | Shows 0% score, natural rolloff |
 
-## Installation
-
-**No dependencies required** - binaries are fully self-contained.
-
-### Pre-built Binaries (Recommended)
-
-Download from [Releases](https://github.com/notactuallytreyanastasio/losselot/releases):
-
-| Platform | Binary |
-|----------|--------|
-| macOS Apple Silicon | `losselot-darwin-arm64` |
-| macOS Intel | `losselot-darwin-amd64` |
-| Linux x86_64 | `losselot-linux-amd64` |
-| Windows x86_64 | `losselot-windows-amd64.exe` |
+## Install to PATH (optional)
 
 ```bash
-# macOS/Linux: make executable and run
-chmod +x losselot-*
-./losselot-darwin-arm64 --help
+# macOS/Linux
+sudo mv losselot-* /usr/local/bin/losselot
 
-# Or move to PATH
-sudo mv losselot-darwin-arm64 /usr/local/bin/losselot
-losselot --help
+# Then run from anywhere
+losselot ~/Music/
 ```
 
-### From Source
-
-Requires [Rust](https://rustup.rs/) (no other dependencies):
+### Build from Source
 
 ```bash
+# Requires Rust (https://rustup.rs)
 git clone https://github.com/notactuallytreyanastasio/losselot.git
 cd losselot
 cargo build --release
 ./target/release/losselot examples/suspect.mp3
-```
 
-### Via Cargo
-
-```bash
+# Or install via cargo
 cargo install --git https://github.com/notactuallytreyanastasio/losselot
 ```
 
