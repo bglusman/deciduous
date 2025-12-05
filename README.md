@@ -119,6 +119,18 @@ Shows how bitrate varies over time for MP3 files. Useful for identifying:
 - **Suspicious patterns** - A "320kbps" file with mostly 128kbps frames is fake
 - **Re-encoding artifacts** - Unusual bitrate distributions can indicate multiple encoding passes
 
+**Stereo Correlation:**
+
+![Stereo Correlation](docs/stereo_correlation.png)
+
+Measures left/right channel similarity over time. The correlation value ranges from -1.0 to 1.0:
+- **1.0 (Mono)** - Identical channels, may indicate fake stereo or mono source
+- **0.7-0.95 (Normal Stereo)** - Typical for most music
+- **0.3-0.7 (Wide Stereo)** - Significant separation between channels
+- **< 0.3 (Very Wide/Phase Issues)** - Unusual, may indicate phase problems
+
+This helps identify mono files masquerading as stereo, or files with unusual stereo processing.
+
 **Analysis Details:**
 - **Verdict**: CLEAN, SUSPECT, or TRANSCODE
 - **Score**: 0-100% (higher = more likely to be fake)

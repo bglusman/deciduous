@@ -804,6 +804,10 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
                 <div class="chart-title">Bitrate Timeline <span style="font-weight: 400; color: var(--dim); font-size: 0.75rem;">(Per-frame bitrate over time)</span></div>
                 <div id="bitrate-timeline-container"></div>
             </div>
+            <div class="stereo-correlation-section" style="margin-top: 1.5rem;">
+                <div class="chart-title">Stereo Correlation <span style="font-weight: 400; color: var(--dim); font-size: 0.75rem;">(L/R channel similarity over time - 1.0 = mono)</span></div>
+                <div id="stereo-correlation-container"></div>
+            </div>
             <div class="detail-grid" style="margin-top: 1.5rem;">
                 <div>
                     <div class="chart-title">Frequency Band Energy</div>
@@ -1453,6 +1457,189 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
             .style('fill', '#86868b')
             .style('font-size', '0.65rem')
             .text(`${{bt.min_bitrate}}k - ${{bt.max_bitrate}}k`);
+    }}
+
+    // Stereo Correlation Chart
+    function drawStereoCorrelation(file) {{
+        const container = document.getElementById('stereo-correlation-container');
+        container.innerHTML = '';
+
+        if (!file.stereo_correlation) {{
+            container.innerHTML = '<div style="text-align: center; color: var(--dim); padding: 1rem; font-size: 0.875rem;">Stereo correlation not available</div>';
+            return;
+        }}
+
+        const sc = file.stereo_correlation;
+
+        if (!sc.is_stereo) {{
+            container.innerHTML = '<div style="text-align: center; color: var(--dim); padding: 1rem; font-size: 0.875rem;">Mono file (single channel)</div>';
+            return;
+        }}
+
+        const margin = {{ top: 20, right: 30, bottom: 40, left: 60 }};
+        const width = Math.min(container.clientWidth || 800, 900) - margin.left - margin.right;
+        const height = 150 - margin.top - margin.bottom;
+
+        const svg = d3.select(container)
+            .append('svg')
+            .attr('width', width + margin.left + margin.right)
+            .attr('height', height + margin.top + margin.bottom);
+
+        const g = svg.append('g')
+            .attr('transform', `translate(${{margin.left}},${{margin.top}})`);
+
+        // X scale (time)
+        const maxTime = sc.times[sc.times.length - 1] || 15;
+        const xScale = d3.scaleLinear()
+            .domain([0, maxTime])
+            .range([0, width]);
+
+        // Y scale (correlation -1 to 1)
+        const yScale = d3.scaleLinear()
+            .domain([-1, 1])
+            .range([height, 0]);
+
+        // Background grid
+        g.append('g')
+            .attr('class', 'grid')
+            .call(d3.axisLeft(yScale).tickSize(-width).tickFormat('').ticks(5))
+            .style('stroke-dasharray', '2,4')
+            .style('stroke-opacity', 0.1);
+
+        // Zero line (uncorrelated)
+        g.append('line')
+            .attr('x1', 0)
+            .attr('x2', width)
+            .attr('y1', yScale(0))
+            .attr('y2', yScale(0))
+            .attr('stroke', '#666')
+            .attr('stroke-width', 1)
+            .attr('stroke-dasharray', '4,4')
+            .attr('opacity', 0.5);
+
+        // Create data points
+        const dataPoints = sc.times.map((t, i) => ({{ time: t, corr: sc.correlations[i] }}));
+
+        // Determine color based on average correlation
+        // High correlation (>0.95) might indicate mono or fake stereo
+        // Very low correlation (<0.3) might indicate issues
+        const avgCorr = sc.avg_correlation;
+        const lineColor = avgCorr > 0.95 ? colors.suspect :
+                          avgCorr < 0.3 ? colors.transcode : colors.ok;
+
+        // Area fill
+        const area = d3.area()
+            .x(d => xScale(d.time))
+            .y0(yScale(0))
+            .y1(d => yScale(d.corr))
+            .curve(d3.curveMonotoneX);
+
+        g.append('path')
+            .datum(dataPoints)
+            .attr('fill', lineColor)
+            .attr('fill-opacity', 0.2)
+            .attr('d', area);
+
+        // Line
+        const line = d3.line()
+            .x(d => xScale(d.time))
+            .y(d => yScale(d.corr))
+            .curve(d3.curveMonotoneX);
+
+        g.append('path')
+            .datum(dataPoints)
+            .attr('fill', 'none')
+            .attr('stroke', lineColor)
+            .attr('stroke-width', 1.5)
+            .attr('d', line);
+
+        // Average line
+        g.append('line')
+            .attr('x1', 0)
+            .attr('x2', width)
+            .attr('y1', yScale(avgCorr))
+            .attr('y2', yScale(avgCorr))
+            .attr('stroke', colors.ok)
+            .attr('stroke-width', 1)
+            .attr('stroke-dasharray', '4,4')
+            .attr('opacity', 0.7);
+
+        g.append('text')
+            .attr('x', width - 5)
+            .attr('y', yScale(avgCorr) - 5)
+            .attr('text-anchor', 'end')
+            .style('fill', colors.ok)
+            .style('font-size', '0.65rem')
+            .text(`avg: ${{avgCorr.toFixed(2)}}`);
+
+        // X axis
+        g.append('g')
+            .attr('transform', `translate(0,${{height}})`)
+            .call(d3.axisBottom(xScale).ticks(6).tickFormat(d => d.toFixed(1) + 's'))
+            .style('color', '#86868b')
+            .style('font-size', '0.7rem');
+
+        // Y axis
+        g.append('g')
+            .call(d3.axisLeft(yScale).ticks(5))
+            .style('color', '#86868b')
+            .style('font-size', '0.7rem');
+
+        // Y axis label
+        svg.append('text')
+            .attr('transform', 'rotate(-90)')
+            .attr('x', -(margin.top + height/2))
+            .attr('y', 14)
+            .attr('text-anchor', 'middle')
+            .style('fill', '#86868b')
+            .style('font-size', '0.65rem')
+            .text('Correlation');
+
+        // X axis label
+        svg.append('text')
+            .attr('x', margin.left + width/2)
+            .attr('y', height + margin.top + 35)
+            .attr('text-anchor', 'middle')
+            .style('fill', '#86868b')
+            .style('font-size', '0.65rem')
+            .text('Time (seconds)');
+
+        // Status indicator
+        let statusText = '';
+        let statusColor = colors.ok;
+        if (avgCorr > 0.98) {{
+            statusText = 'MONO (identical channels)';
+            statusColor = colors.suspect;
+        }} else if (avgCorr > 0.95) {{
+            statusText = 'Near-Mono';
+            statusColor = colors.suspect;
+        }} else if (avgCorr > 0.7) {{
+            statusText = 'Normal Stereo';
+            statusColor = colors.ok;
+        }} else if (avgCorr > 0.3) {{
+            statusText = 'Wide Stereo';
+            statusColor = colors.ok;
+        }} else {{
+            statusText = 'Very Wide / Phase Issues?';
+            statusColor = colors.transcode;
+        }}
+
+        svg.append('text')
+            .attr('x', margin.left + 5)
+            .attr('y', margin.top + 12)
+            .style('fill', statusColor)
+            .style('font-size', '0.7rem')
+            .style('font-weight', '600')
+            .text(statusText);
+
+        // Min/Max labels
+        svg.append('text')
+            .attr('x', margin.left + width - 5)
+            .attr('y', margin.top + 12)
+            .attr('text-anchor', 'end')
+            .style('fill', '#86868b')
+            .style('font-size', '0.65rem')
+            .text(`min: ${{sc.min_correlation.toFixed(2)}} / max: ${{sc.max_correlation.toFixed(2)}}`);
     }}
 
     // Spectral Waterfall Heatmap
@@ -2160,6 +2347,7 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
         drawFileSpectrum(file);
         drawSpectrogram(file);
         drawBitrateTimeline(file);
+        drawStereoCorrelation(file);
 
         const detailsHtml = `
             <div style="display: grid; gap: 0.75rem;">
@@ -2560,6 +2748,35 @@ fn build_json_data(results: &[&AnalysisResult]) -> String {
             "null".to_string()
         };
 
+        // Build stereo correlation JSON if available
+        let stereo_correlation_json = if let Some(ref s) = r.spectral_details {
+            if let Some(ref sc) = s.stereo_correlation {
+                let times: Vec<String> = sc.times.iter().map(|t| format!("{:.3}", t)).collect();
+                let corrs: Vec<String> = sc.correlations.iter().map(|c| format!("{:.4}", c)).collect();
+                format!(r#"{{
+                    "times": [{}],
+                    "correlations": [{}],
+                    "avg_correlation": {:.4},
+                    "min_correlation": {:.4},
+                    "max_correlation": {:.4},
+                    "is_stereo": {},
+                    "channel_count": {}
+                }}"#,
+                    times.join(","),
+                    corrs.join(","),
+                    sc.avg_correlation,
+                    sc.min_correlation,
+                    sc.max_correlation,
+                    sc.is_stereo,
+                    sc.channel_count
+                )
+            } else {
+                "null".to_string()
+            }
+        } else {
+            "null".to_string()
+        };
+
         // Build binary details JSON with encoding history
         let binary = if let Some(ref b) = r.binary_details {
             format!(r#"{{
@@ -2601,7 +2818,8 @@ fn build_json_data(results: &[&AnalysisResult]) -> String {
             "spectral": {},
             "binary": {},
             "spectrogram": {},
-            "bitrate_timeline": {}
+            "bitrate_timeline": {},
+            "stereo_correlation": {}
         }}"#,
             json_escape(&r.file_name),
             json_escape(&r.file_path),
@@ -2616,7 +2834,8 @@ fn build_json_data(results: &[&AnalysisResult]) -> String {
             spectral,
             binary,
             spectrogram_json,
-            bitrate_timeline_json
+            bitrate_timeline_json,
+            stereo_correlation_json
         )
     }).collect();
 

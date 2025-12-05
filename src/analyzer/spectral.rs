@@ -78,6 +78,32 @@ pub struct SpectrogramData {
     pub num_time_slices: usize,
 }
 
+// Stereo correlation parameters
+const STEREO_WINDOW_SIZE: usize = 4096;
+const STEREO_MAX_POINTS: usize = 100;
+
+/// Stereo correlation data - measures L/R channel similarity over time
+/// High correlation (>0.9) may indicate mono or fake stereo
+/// Very low correlation (<0.3) may indicate phase issues or unusual processing
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct StereoCorrelation {
+    /// Time points in seconds
+    pub times: Vec<f64>,
+    /// Correlation coefficient at each time point (-1.0 to 1.0)
+    /// 1.0 = identical channels (mono), 0.0 = uncorrelated, -1.0 = inverted
+    pub correlations: Vec<f64>,
+    /// Average correlation across the file
+    pub avg_correlation: f64,
+    /// Minimum correlation (most stereo separation)
+    pub min_correlation: f64,
+    /// Maximum correlation (least stereo separation)
+    pub max_correlation: f64,
+    /// Whether the file is stereo (true) or mono (false)
+    pub is_stereo: bool,
+    /// Number of channels in the source file
+    pub channel_count: usize,
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct SpectralDetails {
     /// RMS level of full signal (dB)
@@ -103,6 +129,9 @@ pub struct SpectralDetails {
     /// Spectrogram data for visualization (None if not generated)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spectrogram: Option<SpectrogramData>,
+    /// Stereo correlation data (None if mono or not analyzed)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stereo_correlation: Option<StereoCorrelation>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -213,6 +242,167 @@ fn decode_audio(data: &[u8]) -> Option<(Vec<f64>, u32)> {
     }
 
     Some((samples, sample_rate))
+}
+
+/// Decode audio keeping stereo channels separate
+/// Returns (left_channel, right_channel, sample_rate, channel_count)
+fn decode_audio_stereo(data: &[u8]) -> Option<(Vec<f64>, Vec<f64>, u32, usize)> {
+    let cursor = std::io::Cursor::new(data.to_vec());
+    let mss = MediaSourceStream::new(Box::new(cursor), Default::default());
+
+    let hint = Hint::new();
+    let format_opts = FormatOptions::default();
+    let metadata_opts = MetadataOptions::default();
+    let decoder_opts = DecoderOptions::default();
+
+    let probed = symphonia::default::get_probe()
+        .format(&hint, mss, &format_opts, &metadata_opts)
+        .ok()?;
+
+    let mut format = probed.format;
+    let track = format.default_track()?;
+    let track_id = track.id;
+    let sample_rate = track.codec_params.sample_rate.unwrap_or(SAMPLE_RATE);
+
+    let mut decoder = symphonia::default::get_codecs()
+        .make(&track.codec_params, &decoder_opts)
+        .ok()?;
+
+    let mut left_samples = Vec::new();
+    let mut right_samples = Vec::new();
+    let mut sample_buf: Option<SampleBuffer<f32>> = None;
+    let mut detected_channels = 1usize;
+
+    // Decode up to ~15 seconds
+    let max_samples = (sample_rate as usize) * 15;
+
+    loop {
+        let packet = match format.next_packet() {
+            Ok(p) => p,
+            Err(_) => break,
+        };
+
+        if packet.track_id() != track_id {
+            continue;
+        }
+
+        let decoded = match decoder.decode(&packet) {
+            Ok(d) => d,
+            Err(_) => continue,
+        };
+
+        if sample_buf.is_none() {
+            let spec = *decoded.spec();
+            let duration = decoded.capacity() as u64;
+            sample_buf = Some(SampleBuffer::new(duration, spec));
+        }
+
+        if let Some(ref mut buf) = sample_buf {
+            let channel_count = decoded.spec().channels.count();
+            detected_channels = channel_count;
+            buf.copy_interleaved_ref(decoded);
+
+            // Extract left and right channels
+            for chunk in buf.samples().chunks(channel_count) {
+                let left = chunk[0] as f64;
+                let right = if channel_count > 1 { chunk[1] as f64 } else { left };
+                left_samples.push(left);
+                right_samples.push(right);
+            }
+
+            if left_samples.len() >= max_samples {
+                break;
+            }
+        }
+    }
+
+    if left_samples.is_empty() {
+        return None;
+    }
+
+    Some((left_samples, right_samples, sample_rate, detected_channels))
+}
+
+/// Calculate Pearson correlation coefficient between two signals
+fn pearson_correlation(x: &[f64], y: &[f64]) -> f64 {
+    if x.len() != y.len() || x.is_empty() {
+        return 0.0;
+    }
+
+    let n = x.len() as f64;
+    let sum_x: f64 = x.iter().sum();
+    let sum_y: f64 = y.iter().sum();
+    let sum_xy: f64 = x.iter().zip(y.iter()).map(|(a, b)| a * b).sum();
+    let sum_x2: f64 = x.iter().map(|a| a * a).sum();
+    let sum_y2: f64 = y.iter().map(|a| a * a).sum();
+
+    let numerator = n * sum_xy - sum_x * sum_y;
+    let denominator = ((n * sum_x2 - sum_x * sum_x) * (n * sum_y2 - sum_y * sum_y)).sqrt();
+
+    if denominator == 0.0 {
+        return 1.0; // Identical signals
+    }
+
+    (numerator / denominator).clamp(-1.0, 1.0)
+}
+
+/// Analyze stereo correlation over time
+fn analyze_stereo_correlation(data: &[u8]) -> Option<StereoCorrelation> {
+    let (left, right, sample_rate, channel_count) = decode_audio_stereo(data)?;
+
+    if left.len() < STEREO_WINDOW_SIZE {
+        return None;
+    }
+
+    let is_stereo = channel_count > 1;
+    let hop_size = STEREO_WINDOW_SIZE / 2;
+    let num_windows = (left.len() - STEREO_WINDOW_SIZE) / hop_size + 1;
+
+    // Downsample to max points
+    let downsample = (num_windows / STEREO_MAX_POINTS).max(1);
+
+    let mut times = Vec::new();
+    let mut correlations = Vec::new();
+
+    for i in 0..num_windows {
+        if i % downsample != 0 {
+            continue;
+        }
+
+        let start = i * hop_size;
+        let end = start + STEREO_WINDOW_SIZE;
+
+        if end > left.len() {
+            break;
+        }
+
+        let left_window = &left[start..end];
+        let right_window = &right[start..end];
+
+        let corr = pearson_correlation(left_window, right_window);
+        let time = start as f64 / sample_rate as f64;
+
+        times.push(time);
+        correlations.push(corr);
+    }
+
+    if correlations.is_empty() {
+        return None;
+    }
+
+    let avg_correlation = correlations.iter().sum::<f64>() / correlations.len() as f64;
+    let min_correlation = correlations.iter().cloned().fold(f64::INFINITY, f64::min);
+    let max_correlation = correlations.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+
+    Some(StereoCorrelation {
+        times,
+        correlations,
+        avg_correlation,
+        min_correlation,
+        max_correlation,
+        is_stereo,
+        channel_count,
+    })
 }
 
 /// Calculate spectral flatness (Wiener entropy)
@@ -403,6 +593,9 @@ pub fn analyze(data: &[u8], _declared_sample_rate: u32) -> SpectralResult {
             num_time_slices: actual_time_slices,
         });
     }
+
+    // Analyze stereo correlation (separate decode to preserve L/R channels)
+    result.details.stereo_correlation = analyze_stereo_correlation(data);
 
     // Score based on analysis
     // Tuned to detect lossy origins in "lossless" files
@@ -1040,5 +1233,122 @@ mod tests {
                 max_db
             );
         }
+    }
+
+    // ==========================================================================
+    // STEREO CORRELATION TESTS
+    // ==========================================================================
+    //
+    // Stereo correlation measures the similarity between left and right channels.
+    // Uses Pearson correlation coefficient: -1.0 to 1.0
+    //
+    // - 1.0: Identical channels (mono or dual-mono)
+    // - 0.0: Uncorrelated (completely independent)
+    // - -1.0: Inverted phase (one channel is negative of the other)
+    //
+    // Common cases:
+    // - True mono: correlation = 1.0
+    // - Normal stereo music: correlation = 0.5-0.9
+    // - Wide stereo/surround: correlation = 0.3-0.6
+    // - Phase problems: correlation < 0.3 or negative
+    // ==========================================================================
+
+    #[test]
+    fn test_pearson_correlation_identical() {
+        // Identical signals should have correlation = 1.0
+        let x = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+        let y = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+
+        let corr = pearson_correlation(&x, &y);
+        assert!(
+            (corr - 1.0).abs() < 0.001,
+            "Identical signals should have correlation 1.0, got {}",
+            corr
+        );
+    }
+
+    #[test]
+    fn test_pearson_correlation_inverted() {
+        // Inverted signals should have correlation = -1.0
+        let x = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+        let y = vec![-1.0, -2.0, -3.0, -4.0, -5.0];
+
+        let corr = pearson_correlation(&x, &y);
+        assert!(
+            (corr - (-1.0)).abs() < 0.001,
+            "Inverted signals should have correlation -1.0, got {}",
+            corr
+        );
+    }
+
+    #[test]
+    fn test_pearson_correlation_uncorrelated() {
+        // Orthogonal signals should have correlation near 0
+        // Using signals that alternate in opposite patterns
+        let x = vec![1.0, -1.0, 1.0, -1.0];
+        let y = vec![1.0, 1.0, -1.0, -1.0];
+
+        let corr = pearson_correlation(&x, &y);
+        assert!(
+            corr.abs() < 0.01,
+            "Uncorrelated signals should have correlation near 0, got {}",
+            corr
+        );
+    }
+
+    #[test]
+    fn test_pearson_correlation_scaled() {
+        // Scaled signals should still have correlation = 1.0
+        let x = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+        let y = vec![2.0, 4.0, 6.0, 8.0, 10.0]; // 2x scale
+
+        let corr = pearson_correlation(&x, &y);
+        assert!(
+            (corr - 1.0).abs() < 0.001,
+            "Scaled signals should still have correlation 1.0, got {}",
+            corr
+        );
+    }
+
+    #[test]
+    fn test_stereo_correlation_struct() {
+        // StereoCorrelation struct should hold all expected fields
+        let sc = StereoCorrelation {
+            times: vec![0.0, 0.1, 0.2],
+            correlations: vec![0.9, 0.85, 0.92],
+            avg_correlation: 0.89,
+            min_correlation: 0.85,
+            max_correlation: 0.92,
+            is_stereo: true,
+            channel_count: 2,
+        };
+
+        assert_eq!(sc.times.len(), 3);
+        assert_eq!(sc.correlations.len(), 3);
+        assert!(sc.is_stereo);
+        assert_eq!(sc.channel_count, 2);
+        assert!(sc.avg_correlation > 0.0 && sc.avg_correlation <= 1.0);
+    }
+
+    #[test]
+    fn test_stereo_correlation_in_spectral_details() {
+        // SpectralDetails should be able to hold stereo correlation data
+        let details = SpectralDetails {
+            stereo_correlation: Some(StereoCorrelation {
+                times: vec![0.0, 0.5, 1.0],
+                correlations: vec![0.95, 0.93, 0.96],
+                avg_correlation: 0.9467,
+                min_correlation: 0.93,
+                max_correlation: 0.96,
+                is_stereo: true,
+                channel_count: 2,
+            }),
+            ..Default::default()
+        };
+
+        assert!(details.stereo_correlation.is_some());
+        let sc = details.stereo_correlation.unwrap();
+        assert!(sc.is_stereo);
+        assert!(sc.avg_correlation > 0.9);
     }
 }
