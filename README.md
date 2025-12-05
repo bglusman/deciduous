@@ -11,46 +11,31 @@ Detect "lossless" audio files that were actually created from lossy sources.
 | Linux x86_64 | [losselot-linux-amd64](https://github.com/notactuallytreyanastasio/losselot/releases/download/v0.2.0/losselot-linux-amd64) |
 | Windows x86_64 | [losselot-windows-amd64.exe](https://github.com/notactuallytreyanastasio/losselot/releases/download/v0.2.0/losselot-windows-amd64.exe) |
 
-**No dependencies** - just download, `chmod +x`, and run.
+**No dependencies** - just download and run.
 
-## Quick Start
+## Just Double-Click
 
-```bash
-chmod +x losselot-*
-./losselot-darwin-arm64 examples/suspect.mp3
-```
+1. Download the binary for your platform
+2. Double-click it from your Downloads folder (or anywhere)
+3. Select a folder or file to analyze
+4. Get an interactive HTML report in your browser
 
-**Output:**
-```
-[TRANSCODE]  75%   255kbps  LAME3.97      possible_lossy_origin,cliff...  suspect.mp3
-```
+That's it. No terminal, no commands, no setup.
 
-This example file scores **75% TRANSCODE** - it's a 256kbps MP3 that was encoded from an already-lossy source (~192-224kbps), not from the original WAV. The telltale sign: frequencies cut off at 19kHz instead of the 19.5kHz this bitrate should allow.
+## Interactive Reports
 
-### Try It Yourself
+Losselot generates beautiful dark-mode HTML reports with D3.js visualizations:
 
-```bash
-# Analyze a single file
-losselot myfile.flac
+![Losselot Report Example](docs/report-example.png)
 
-# Analyze your whole library
-losselot ~/Music/
+**What you see:**
+- **Summary cards** - Quick counts of Clean, Suspect, and Transcode files
+- **Verdict distribution** - Donut chart showing your library's health
+- **Score distribution** - Bar chart of all files sorted by suspicion score
+- **Detailed analysis** - Click any file to see frequency band energy, spectral metrics, and detection flags
+- **Searchable table** - Sort and filter your results
 
-# Verbose output (see spectral details)
-losselot -v myfile.flac
-
-# Generate HTML report
-losselot -o report.html ~/Music/
-```
-
-### GUI Mode
-
-**Double-click to run** - no terminal needed! When you double-click the binary from Finder/Explorer, Losselot automatically opens a file picker dialog. Select a folder or file and get an interactive HTML report that opens in your browser.
-
-```bash
-# Or launch GUI mode from terminal
-losselot --gui
-```
+In this example, `sus2.mp3` is flagged as **SUSPECT (45%)** - a 320kbps iTunes file with `hf_cutoff_detected` and `weak_ultrasonic_content` flags. The frequency band chart shows healthy low frequencies but degraded upper/ultrasonic bands.
 
 ## The Problem
 
@@ -77,6 +62,121 @@ Losselot performs **spectral analysis** to measure energy in different frequency
 | MP3 → MP3 transcode | Detected via spectral + LAME header analysis |
 | Real lossless | Shows 0% score, natural rolloff |
 
+## Understanding Results
+
+### Verdicts
+
+- **CLEAN (0-34%)**: Appears to be genuine lossless
+- **SUSPECT (35-64%)**: Might have lossy origins, worth investigating
+- **TRANSCODE (65-100%)**: Almost certainly from a lossy source
+
+### Key Metrics in Reports
+
+| Metric | What It Means | Clean Value | Transcode Value |
+|--------|---------------|-------------|-----------------|
+| Upper Drop | Energy loss from 10-15kHz to 17-20kHz | ~4-8 dB | ~40-70 dB |
+| Ultrasonic Drop | Energy loss from 19-20kHz to 20-22kHz | ~1-2 dB | ~40-50 dB |
+| Flatness (19-21k) | Content complexity above 20kHz | ~0.8-0.99 | ~0.01-0.1 |
+
+### Flags
+
+| Flag | Meaning |
+|------|---------|
+| `severe_hf_damage` | Major high frequency loss (probably from 128kbps or lower) |
+| `hf_cutoff_detected` | Clear lossy cutoff pattern detected |
+| `possible_lossy_origin` | Mild HF damage, possibly from high-bitrate lossy |
+| `cliff_at_20khz` | Sharp cutoff at 20kHz (320kbps MP3 signature) |
+| `weak_ultrasonic_content` | Low energy above 20kHz |
+| `dead_ultrasonic_band` | No content above 20kHz (strong 320k indicator) |
+| `lowpass_mismatch` | (MP3 only) LAME header lowpass doesn't match bitrate |
+
+## Supported Formats
+
+**Input formats:** FLAC, WAV, AIFF, MP3, M4A, AAC, OGG, Opus, WMA, ALAC
+
+The primary use case is analyzing FLAC/WAV files, but Losselot can also detect MP3→MP3 transcodes.
+
+## Limitations
+
+- **High-bitrate lossy is harder**: MP3 320kbps has cutoff near 20kHz, but ultrasonic analysis helps
+- **Some codecs are stealthier**: AAC and Vorbis are more efficient than MP3, leaving less obvious damage
+- **Dark/quiet recordings**: Low energy in high frequencies is normal for some content
+- **Not 100% definitive**: Use as one data point, not absolute proof
+
+---
+
+## CLI Usage
+
+For power users, Losselot has a full command-line interface:
+
+```bash
+# Make executable (macOS/Linux)
+chmod +x losselot-*
+
+# Analyze a single file
+losselot myfile.flac
+
+# Analyze your whole library
+losselot ~/Music/
+
+# Verbose output (see spectral details)
+losselot -v myfile.flac
+
+# Generate HTML report to specific path
+losselot -o report.html ~/Music/
+
+# Launch GUI mode from terminal
+losselot --gui
+```
+
+### CLI Reference
+
+```
+losselot [OPTIONS] [PATH]
+
+Arguments:
+  [PATH]  File or directory to analyze (optional in GUI mode)
+
+Options:
+      --gui                  Launch GUI file picker
+  -o, --output <FILE>        Output report file (.html, .csv, .json)
+      --report-dir <DIR>     Directory for auto-generated reports [default: losselot-reports]
+      --no-report            Don't auto-generate HTML report
+      --no-open              Don't prompt to open report
+  -j, --jobs <NUM>           Number of parallel workers (default: CPU count)
+      --no-spectral          Skip spectral analysis (faster, binary-only)
+  -v, --verbose              Show detailed analysis
+  -q, --quiet                Only show summary
+      --threshold <NUM>      Transcode threshold percentage [default: 65]
+  -h, --help                 Print help
+  -V, --version              Print version
+```
+
+### Exit Codes
+
+- `0`: All files clean
+- `1`: Some files suspect
+- `2`: Transcodes detected
+
+### Report Formats
+
+**HTML** - Interactive dark-mode report with D3.js charts (default)
+
+**CSV**
+```csv
+verdict,filepath,bitrate_kbps,combined_score,spectral_score,binary_score,flags,encoder,lowpass
+TRANSCODE,/path/to/fake.flac,0,80,80,0,severe_hf_damage,,
+```
+
+**JSON**
+```json
+{
+  "generated": "2024-01-01T00:00:00Z",
+  "summary": {"total": 100, "ok": 85, "suspect": 10, "transcode": 5},
+  "files": [...]
+}
+```
+
 ## Install to PATH (optional)
 
 ```bash
@@ -87,114 +187,15 @@ sudo mv losselot-* /usr/local/bin/losselot
 losselot ~/Music/
 ```
 
-### Build from Source
+## Build from Source
 
 ```bash
 # Requires Rust (https://rustup.rs)
 git clone https://github.com/notactuallytreyanastasio/losselot.git
 cd losselot
 cargo build --release
-./target/release/losselot examples/suspect.mp3
-
-# Or install via cargo
-cargo install --git https://github.com/notactuallytreyanastasio/losselot
+./target/release/losselot --gui
 ```
-
-## Supported Formats
-
-**Input formats:** FLAC, WAV, AIFF, MP3, M4A, AAC, OGG, Opus, WMA, ALAC
-
-The primary use case is analyzing FLAC/WAV files, but Losselot can also detect MP3→MP3 transcodes using binary forensics (LAME header analysis).
-
-## Understanding Results
-
-### Verdicts
-
-- **OK (0-34%)**: Appears to be genuine lossless
-- **SUSPECT (35-64%)**: Might have lossy origins, worth investigating
-- **TRANSCODE (65-100%)**: Almost certainly from a lossy source
-
-### Flags
-
-| Flag | Meaning |
-|------|---------|
-| `severe_hf_damage` | Major high frequency loss (probably from 128kbps or lower) |
-| `hf_cutoff_detected` | Clear lossy cutoff pattern detected |
-| `possible_lossy_origin` | Mild HF damage, possibly from high-bitrate lossy |
-| `cliff_at_20khz` | Sharp cutoff at 20kHz (320kbps MP3 signature) |
-| `steep_20khz_cutoff` | Significant drop at 20kHz boundary |
-| `possible_320k_origin` | May have originated from 320kbps MP3 |
-| `dead_ultrasonic_band` | No content above 20kHz (strong 320k indicator) |
-| `weak_ultrasonic_content` | Low energy above 20kHz |
-| `steep_hf_rolloff` | High frequencies drop off too sharply |
-| `silent_17k+` | Upper frequencies (17-20kHz) are essentially silent |
-| `silent_20k+` | Ultrasonic frequencies (20-22kHz) are silent |
-| `lowpass_mismatch` | (MP3 only) LAME header lowpass doesn't match bitrate |
-
-### Verbose Output
-
-Use `-v` to see spectral details:
-```
-Spectral: full=59.1dB high=30.9dB upper=25.6dB ultrasonic=-39.4dB
-Drops: upper=11.2dB ultrasonic=44.7dB | flatness_19-21k=0.015
-```
-
-Key metrics:
-- **upper_drop**: Difference between 10-15kHz and 17-20kHz bands. Real lossless: ~4-8dB. Transcode from 128k: ~40-70dB.
-- **ultrasonic_drop**: Difference between 19-20kHz and 20-22kHz. Real lossless: ~1-2dB. 320k transcode: ~40-50dB.
-- **flatness**: Content complexity above 20kHz. Real lossless: ~0.8-0.99. 320k transcode: ~0.01-0.1.
-
-## CLI Reference
-
-```
-losselot [OPTIONS] <PATH>
-
-Arguments:
-  <PATH>  File or directory to analyze
-
-Options:
-  -o, --output <FILE>      Output report file (.html, .csv, .json)
-  -j, --jobs <NUM>         Number of parallel workers (default: CPU count)
-      --no-spectral        Skip spectral analysis (faster, binary-only)
-  -v, --verbose            Show detailed analysis
-  -q, --quiet              Only show summary
-      --threshold <NUM>    Transcode threshold percentage [default: 65]
-  -h, --help               Print help
-  -V, --version            Print version
-```
-
-### Exit Codes
-
-- `0`: All files clean
-- `1`: Some files suspect
-- `2`: Transcodes detected
-
-## Report Formats
-
-### HTML
-Dark-mode report with summary statistics, color-coded verdicts, and flag reference.
-
-### CSV
-```csv
-verdict,filepath,bitrate_kbps,combined_score,spectral_score,binary_score,flags,encoder,lowpass
-TRANSCODE,/path/to/fake.flac,0,80,80,0,severe_hf_damage,,
-```
-
-### JSON
-```json
-{
-  "generated": "2024-01-01T00:00:00Z",
-  "summary": {"total": 100, "ok": 85, "suspect": 10, "transcode": 5},
-  "files": [...]
-}
-```
-
-## Limitations
-
-- **High-bitrate lossy is harder**: MP3 320kbps has cutoff near 20kHz, but ultrasonic analysis helps
-- **Some codecs are stealthier**: AAC and Vorbis are more efficient than MP3, leaving less obvious damage
-- **Dark/quiet recordings**: Low energy in high frequencies is normal for some content
-- **Not 100% definitive**: Use as one data point, not absolute proof
 
 ---
 
@@ -248,98 +249,11 @@ Real lossless at 20-21kHz: -32.5 dB (content present)
 320k transcode at 20-21kHz: -82.6 dB (dead silence)
 ```
 
-We measure:
-- **ultrasonic_drop**: Energy difference between 19-20kHz and 20-22kHz
-- **spectral_flatness**: Statistical measure of content complexity (1.0 = noise-like, 0.0 = empty)
-
-### LAME Header Forensics (MP3 only)
-
-LAME encoder embeds metadata in the first frame's Xing/Info header:
-
-```
-Offset  Field
-------  -----
-0-3     "LAME" signature
-4-8     Version (e.g., "3.100")
-9       VBR method + quality
-10      Lowpass frequency ÷ 100
-```
-
-The **lowpass byte** is the smoking gun for MP3→MP3 transcodes:
-- A "320kbps" file with lowpass=160 (16kHz) was transcoded from 128kbps
-- The encoder faithfully recorded what lowpass it applied, but the source was already damaged
-
-### Scoring Algorithm
-
-Points are additive across multiple indicators:
-
-**Low-bitrate damage (upper_drop metric):**
-- >40 dB: +50 points (severe_hf_damage)
-- >15 dB: +35 points (hf_cutoff_detected)
-- >10 dB: +20 points (possible_lossy_origin)
-
-**320k detection (ultrasonic_drop metric):**
-- >40 dB: +35 points (cliff_at_20khz)
-- >25 dB: +25 points (steep_20khz_cutoff)
-- >15 dB: +15 points (possible_320k_origin)
-
-**Spectral flatness (ultrasonic band):**
-- <0.3: +20 points (dead_ultrasonic_band)
-- <0.5: +10 points (weak_ultrasonic_content)
-
-**Absolute thresholds:**
-- rms_upper < -50 dB: +15 points (silent_17k+)
-- rms_ultrasonic < -70 dB: +10 points (silent_20k+)
-- high_drop > 48 dB: +15 points (steep_hf_rolloff)
-
-**MP3-specific (lowpass mismatch):**
-- Lowpass < expected for bitrate: +25-40 points
-
-### Example: Analyzing the Included suspect.mp3
-
-```
-Bitrate: 255 kbps (VBR)
-Encoder: LAME 3.97
-Lowpass header: 19500 Hz
-
-Energy by band:
-  10-15kHz: healthy
-  15-19kHz: gradual rolloff (-2.8 dB at 18-19k)
-  19-20kHz: CLIFF (-39.3 dB, drops 36.6 dB from previous band)
-  20-22kHz: dead (-64 dB)
-
-Analysis:
-  The lowpass header says 19500 Hz, which is correct for 256kbps.
-  BUT the actual cliff is at 19kHz, not 19.5kHz.
-  This means the SOURCE already had a 19kHz cutoff before this encode.
-
-Conclusion:
-  This 256kbps file was encoded from a ~192-224kbps source.
-  The "mastered to MP3" original was NOT 320kbps - it was ~200kbps.
-  Score: 75% TRANSCODE
-```
-
-### Building from Source
-
-```bash
-# Clone
-git clone https://github.com/notactuallytreyanastasio/losselot.git
-cd losselot
-
-# Build (release mode for performance)
-cargo build --release
-
-# Run tests
-cargo test
-
-# The binary is at target/release/losselot
-```
-
 ### Architecture
 
 ```
 src/
-├── main.rs           # CLI entry point
+├── main.rs           # CLI entry point + GUI detection
 ├── lib.rs            # Library exports
 ├── analyzer/
 │   ├── mod.rs        # Analyzer orchestration
@@ -351,7 +265,7 @@ src/
 │   └── lame.rs       # LAME/Xing header extraction
 └── report/
     ├── mod.rs        # Report generation
-    ├── html.rs       # HTML reports
+    ├── html.rs       # D3.js HTML reports
     ├── csv.rs        # CSV export
     └── json.rs       # JSON export
 ```
@@ -360,7 +274,7 @@ src/
 - `symphonia` - Pure Rust audio decoder (MP3, FLAC, WAV, OGG, etc.)
 - `rustfft` - Pure Rust FFT implementation
 - `rayon` - Parallel file processing
-- `clap` - CLI argument parsing
+- `rfd` - Native file dialogs for GUI mode
 
 No external binaries (ffmpeg, sox) required.
 
