@@ -142,7 +142,7 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
             border-radius: 50%;
         }}
 
-        /* File Details Panel */
+        /* File Details Panel (slide-down) */
         .detail-panel {{
             background: var(--card);
             border-radius: 16px;
@@ -155,6 +155,51 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
         @keyframes slideIn {{
             from {{ opacity: 0; transform: translateY(-10px); }}
             to {{ opacity: 1; transform: translateY(0); }}
+        }}
+
+        /* Modal Overlay for table row quick view */
+        .modal-overlay {{
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            z-index: 900;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }}
+        .modal-overlay.active {{
+            display: block;
+            opacity: 1;
+        }}
+
+        /* Quick View Modal */
+        .quick-modal {{
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.95);
+            background: var(--card);
+            border-radius: 20px;
+            padding: 0;
+            width: 90%;
+            max-width: 700px;
+            max-height: 85vh;
+            overflow-y: auto;
+            display: none;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }}
+        .quick-modal.active {{
+            display: block;
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
         }}
         .detail-header {{
             display: flex;
@@ -185,6 +230,72 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 1.5rem;
+        }}
+
+        /* Quick Modal styles */
+        .modal-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            background: linear-gradient(180deg, #fafbfc 0%, #ffffff 100%);
+            border-radius: 20px 20px 0 0;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }}
+        .modal-filename {{
+            font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+            font-size: 0.9375rem;
+            font-weight: 600;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }}
+        .modal-close {{
+            background: rgba(0,0,0,0.05);
+            border: none;
+            color: var(--dim);
+            cursor: pointer;
+            font-size: 1.5rem;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.15s ease;
+            line-height: 1;
+        }}
+        .modal-close:hover {{ background: rgba(0,0,0,0.1); color: var(--text); }}
+        .modal-body {{
+            padding: 1.5rem;
+        }}
+        .modal-stats {{
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }}
+        .modal-stat {{
+            text-align: center;
+            padding: 1rem;
+            background: var(--bg);
+            border-radius: 12px;
+        }}
+        .modal-stat-value {{
+            font-size: 1.5rem;
+            font-weight: 600;
+            line-height: 1;
+        }}
+        .modal-stat-label {{
+            font-size: 0.6875rem;
+            color: var(--dim);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-top: 0.375rem;
         }}
         #file-spectrum {{ width: 100%; }}
 
@@ -369,12 +480,7 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
             fill: #c9302c;
         }}
 
-        /* Enhanced Detail Panel */
-        .detail-grid-enhanced {{
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 1.5rem;
-        }}
+        /* Spectrum analyzer container */
         .spectrum-analyzer {{
             background: linear-gradient(180deg, #fafbfc 0%, #f0f2f5 100%);
             border-radius: 12px;
@@ -382,18 +488,10 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
             position: relative;
             border: 1px solid rgba(0,0,0,0.06);
         }}
-        .spectrum-analyzer-label {{
-            position: absolute;
-            bottom: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 0.625rem;
-            color: var(--dim);
-            letter-spacing: 0.12em;
-            font-weight: 600;
-            text-transform: uppercase;
-        }}
         #freq-response-curve {{
+            width: 100%;
+        }}
+        #file-spectrum {{
             width: 100%;
         }}
         .freq-band-highlight {{
@@ -401,6 +499,7 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
             stroke: var(--transcode);
             stroke-width: 1;
             stroke-dasharray: 4, 2;
+            pointer-events: none;
         }}
         .freq-band-ok {{
             fill: rgba(52, 199, 89, 0.08);
@@ -475,6 +574,151 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
         /* SVG axis styling for light theme */
         .grid line {{ stroke: rgba(0,0,0,0.08); }}
         .grid path {{ stroke: none; }}
+
+        /* Encoding Chain Timeline Visualization - Full Width at Bottom */
+        .encoding-chain-viz {{
+            background: linear-gradient(135deg, #fef3f2 0%, #fef9f8 100%);
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin-top: 1.5rem;
+            border: 1px solid rgba(255, 59, 48, 0.2);
+        }}
+        /* Full width in modal */
+        .quick-modal .encoding-chain-viz {{
+            border-radius: 0 0 20px 20px;
+            margin: 0 -1.5rem -1.5rem -1.5rem;
+            border: none;
+            border-top: 1px solid rgba(255, 59, 48, 0.15);
+        }}
+        .encoding-chain-title {{
+            font-size: 0.8125rem;
+            font-weight: 600;
+            color: var(--transcode);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }}
+        .chain-timeline {{
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 0;
+            overflow-x: auto;
+            padding: 0.5rem 0;
+        }}
+        .chain-node {{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 90px;
+        }}
+        .chain-encoder {{
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            padding: 0.625rem 0.875rem;
+            font-family: 'SF Mono', monospace;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+            transition: all 0.2s ease;
+            text-align: center;
+            min-width: 70px;
+        }}
+        .chain-encoder.source {{
+            border-color: var(--ok);
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+        }}
+        .chain-encoder.lossy {{
+            border-color: var(--suspect);
+            background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+        }}
+        .chain-encoder.final {{
+            border-color: var(--transcode);
+            background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+        }}
+        .chain-encoder:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }}
+        .chain-arrow {{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0 0.25rem;
+        }}
+        .chain-arrow svg {{
+            width: 32px;
+            height: 20px;
+            color: var(--transcode);
+        }}
+        .chain-arrow-label {{
+            font-size: 0.5625rem;
+            color: var(--dim);
+            margin-top: 2px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }}
+        .chain-quality {{
+            font-size: 0.625rem;
+            color: var(--dim);
+            margin-top: 0.375rem;
+            font-weight: 500;
+        }}
+        .chain-quality.degraded {{
+            color: var(--transcode);
+        }}
+        .chain-legend {{
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid rgba(0,0,0,0.06);
+            flex-wrap: wrap;
+        }}
+        .chain-legend-item {{
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            font-size: 0.6875rem;
+            color: var(--dim);
+        }}
+        .chain-legend-dot {{
+            width: 8px;
+            height: 8px;
+            border-radius: 2px;
+        }}
+
+        /* Spectral damage overlay styles */
+        .damage-zone {{
+            fill: url(#damagePattern);
+            opacity: 0.4;
+        }}
+        .damage-annotation {{
+            font-size: 0.625rem;
+            fill: var(--transcode);
+            font-weight: 600;
+        }}
+        .cumulative-damage-bar {{
+            height: 6px;
+            background: linear-gradient(90deg, var(--ok), var(--suspect), var(--transcode));
+            border-radius: 3px;
+            margin-top: 0.5rem;
+            position: relative;
+        }}
+        .damage-marker {{
+            position: absolute;
+            top: -4px;
+            width: 14px;
+            height: 14px;
+            background: var(--transcode);
+            border: 2px solid white;
+            border-radius: 50%;
+            transform: translateX(-50%);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }}
     </style>
 </head>
 <body>
@@ -543,22 +787,36 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
                 <div class="detail-filename" id="detail-filename">filename.mp3</div>
                 <button class="detail-close" onclick="closeDetail()">&times;</button>
             </div>
-            <div class="detail-grid-enhanced">
-                <div class="spectrum-analyzer">
-                    <div class="chart-title">Frequency Response Curve</div>
-                    <div id="freq-response-curve"></div>
-                    <div class="spectrum-analyzer-label">FREQUENCY SPECTRUM ANALYSIS</div>
+            <div class="spectrum-analyzer">
+                <div class="chart-title">Frequency Response Curve</div>
+                <div id="freq-response-curve"></div>
+            </div>
+            <div class="detail-grid" style="margin-top: 1.5rem;">
+                <div>
+                    <div class="chart-title">Frequency Band Energy</div>
+                    <div id="file-spectrum"></div>
                 </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
-                    <div>
-                        <div class="chart-title">Frequency Band Energy</div>
-                        <div id="file-spectrum"></div>
-                    </div>
-                    <div>
-                        <div class="chart-title">Analysis Details</div>
-                        <div id="file-details"></div>
-                    </div>
+                <div>
+                    <div class="chart-title">Analysis Details</div>
+                    <div id="file-details"></div>
                 </div>
+            </div>
+            <div id="encoding-chain-container"></div>
+        </div>
+
+        <div class="modal-overlay" id="modal-overlay" onclick="closeQuickModal()"></div>
+        <div class="quick-modal" id="quick-modal">
+            <div class="modal-header">
+                <div class="modal-filename">
+                    <span id="modal-verdict"></span>
+                    <span id="modal-filename">filename.mp3</span>
+                </div>
+                <button class="modal-close" onclick="closeQuickModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-stats" id="modal-stats"></div>
+                <div id="modal-details"></div>
+                <div id="modal-encoding-chain"></div>
             </div>
         </div>
 
@@ -749,83 +1007,136 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
 
         if (!file.spectral) return;
 
-        const margin = {{ top: 20, right: 30, bottom: 60, left: 60 }};
+        const margin = {{ top: 20, right: 20, bottom: 40, left: 50 }};
         const width = container.clientWidth - margin.left - margin.right;
-        const height = 250 - margin.top - margin.bottom;
+        const height = 200 - margin.top - margin.bottom;
 
         const svg = d3.select('#file-spectrum')
             .append('svg')
             .attr('width', width + margin.left + margin.right)
-            .attr('height', height + margin.top + margin.bottom)
-            .append('g')
+            .attr('height', height + margin.top + margin.bottom);
+
+        const defs = svg.append('defs');
+
+        // Gradient for the spectrum fill
+        const spectrumGradient = defs.append('linearGradient')
+            .attr('id', 'spectrumGrad')
+            .attr('x1', '0%')
+            .attr('x2', '100%');
+
+        spectrumGradient.append('stop')
+            .attr('offset', '0%')
+            .attr('stop-color', colors.ok);
+        spectrumGradient.append('stop')
+            .attr('offset', '60%')
+            .attr('stop-color', colors.ok);
+        spectrumGradient.append('stop')
+            .attr('offset', '80%')
+            .attr('stop-color', colors.suspect);
+        spectrumGradient.append('stop')
+            .attr('offset', '100%')
+            .attr('stop-color', colors.transcode);
+
+        const g = svg.append('g')
             .attr('transform', `translate(${{margin.left}},${{margin.top}})`);
 
+        // Normalize values to 0-100 scale for display
+        const normalize = (val) => Math.max(0, Math.min(100, (val + 80) * 1.25));
+
         const bands = [
-            {{ label: 'Full', value: file.spectral.rms_full, range: '20Hz-20kHz' }},
-            {{ label: 'Mid-High', value: file.spectral.rms_mid_high, range: '10-15kHz' }},
-            {{ label: 'High', value: file.spectral.rms_high, range: '15-20kHz' }},
-            {{ label: 'Upper', value: file.spectral.rms_upper, range: '17-20kHz' }},
-            {{ label: 'Ultrasonic', value: file.spectral.rms_ultrasonic, range: '20-22kHz' }}
+            {{ label: '20Hz', freq: 20, value: normalize(file.spectral.rms_full), raw: file.spectral.rms_full }},
+            {{ label: '1kHz', freq: 1000, value: normalize(file.spectral.rms_full * 0.98), raw: file.spectral.rms_full }},
+            {{ label: '5kHz', freq: 5000, value: normalize(file.spectral.rms_mid_high * 1.05), raw: file.spectral.rms_mid_high }},
+            {{ label: '10kHz', freq: 10000, value: normalize(file.spectral.rms_mid_high), raw: file.spectral.rms_mid_high }},
+            {{ label: '15kHz', freq: 15000, value: normalize(file.spectral.rms_high), raw: file.spectral.rms_high }},
+            {{ label: '17kHz', freq: 17000, value: normalize(file.spectral.rms_upper), raw: file.spectral.rms_upper }},
+            {{ label: '20kHz', freq: 20000, value: normalize(file.spectral.rms_ultrasonic), raw: file.spectral.rms_ultrasonic }},
+            {{ label: '22kHz', freq: 22000, value: normalize(file.spectral.rms_ultrasonic * 0.8), raw: file.spectral.rms_ultrasonic }}
         ];
 
-        const x = d3.scaleBand()
-            .domain(bands.map(d => d.label))
-            .range([0, width])
-            .padding(0.3);
-
-        const minVal = Math.min(...bands.map(d => d.value), -80);
-        const maxVal = Math.max(...bands.map(d => d.value), 0);
+        const x = d3.scaleLog()
+            .domain([20, 22000])
+            .range([0, width]);
 
         const y = d3.scaleLinear()
-            .domain([minVal - 10, maxVal + 10])
+            .domain([0, 100])
             .range([height, 0]);
 
-        // Grid
+        // Background grid
         svg.append('g')
+            .attr('transform', `translate(${{margin.left}},${{margin.top}})`)
+            .call(d3.axisLeft(y).tickSize(-width).tickFormat('').ticks(5))
             .attr('class', 'grid')
-            .call(d3.axisLeft(y).tickSize(-width).tickFormat(''))
-            .style('stroke-dasharray', '3,3')
-            .style('stroke-opacity', 0.12);
+            .style('stroke-dasharray', '2,4')
+            .style('stroke-opacity', 0.1);
 
-        // Bars
-        svg.selectAll('.bar')
+        // Create area generator for waveform look
+        const area = d3.area()
+            .x(d => x(d.freq))
+            .y0(height)
+            .y1(d => y(d.value))
+            .curve(d3.curveMonotoneX);
+
+        // Create line generator
+        const line = d3.line()
+            .x(d => x(d.freq))
+            .y(d => y(d.value))
+            .curve(d3.curveMonotoneX);
+
+        // Draw filled area
+        g.append('path')
+            .datum(bands)
+            .attr('d', area)
+            .attr('fill', 'url(#spectrumGrad)')
+            .attr('opacity', 0.6);
+
+        // Draw line on top
+        g.append('path')
+            .datum(bands)
+            .attr('d', line)
+            .attr('fill', 'none')
+            .attr('stroke', 'url(#spectrumGrad)')
+            .attr('stroke-width', 2.5);
+
+        // Data points
+        g.selectAll('.spectrum-point')
             .data(bands)
             .enter()
-            .append('rect')
-            .attr('x', d => x(d.label))
-            .attr('width', x.bandwidth())
-            .attr('y', d => d.value >= 0 ? y(d.value) : y(0))
-            .attr('height', d => Math.abs(y(d.value) - y(0)))
-            .attr('rx', 4)
-            .attr('fill', (d, i) => {{
-                if (i === 4) return d.value < -60 ? colors.transcode : colors.ok;
-                return colors.ok;
-            }})
+            .append('circle')
+            .attr('cx', d => x(d.freq))
+            .attr('cy', d => y(d.value))
+            .attr('r', 5)
+            .attr('fill', d => d.freq >= 17000 && d.value < 30 ? colors.transcode : colors.ok)
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 2)
+            .style('cursor', 'pointer')
             .on('mouseover', function(event, d) {{
-                showTooltip(event, `${{d.range}}: ${{d.value.toFixed(1)}} dB`);
+                d3.select(this).attr('r', 7);
+                showTooltip(event, `${{d.label}}: ${{d.raw.toFixed(1)}} dB`);
             }})
-            .on('mouseout', hideTooltip);
+            .on('mouseout', function() {{
+                d3.select(this).attr('r', 5);
+                hideTooltip();
+            }});
 
-        // Zero line
-        svg.append('line')
-            .attr('x1', 0)
-            .attr('x2', width)
-            .attr('y1', y(0))
-            .attr('y2', y(0))
-            .attr('stroke', '#86868b')
-            .attr('stroke-dasharray', '3,3');
-
-        // Axes
-        svg.append('g')
+        // X axis
+        g.append('g')
             .attr('transform', `translate(0,${{height}})`)
-            .call(d3.axisBottom(x))
+            .call(d3.axisBottom(x)
+                .tickValues([100, 1000, 10000, 20000])
+                .tickFormat(d => d >= 1000 ? (d/1000) + 'k' : d))
             .style('color', '#86868b')
-            .style('font-size', '0.75rem');
+            .style('font-size', '0.7rem');
 
-        svg.append('g')
-            .call(d3.axisLeft(y).ticks(6).tickFormat(d => d + ' dB'))
-            .style('color', '#86868b')
-            .style('font-size', '0.75rem');
+        // Y axis label
+        svg.append('text')
+            .attr('transform', 'rotate(-90)')
+            .attr('x', -(margin.top + height/2))
+            .attr('y', 12)
+            .attr('text-anchor', 'middle')
+            .style('fill', '#86868b')
+            .style('font-size', '0.65rem')
+            .text('Energy');
     }}
 
     // Spectral Waterfall Heatmap
@@ -1284,6 +1595,58 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
                 .style('font-size', '0.7rem')
                 .text('Lossy compression damage detected');
         }}
+
+        // Re-encoding damage annotations - subtle indicator
+        if (file.binary && file.binary.reencoded) {{
+            const lossyPasses = (file.binary.lame_occurrences || 0) + (file.binary.ffmpeg_occurrences || 0);
+
+            // Subtle vertical band at high frequencies showing re-encode damage zone
+            const damageGradient = defs.append('linearGradient')
+                .attr('id', 'damageGradient')
+                .attr('x1', '0%')
+                .attr('x2', '100%');
+
+            damageGradient.append('stop')
+                .attr('offset', '0%')
+                .attr('stop-color', colors.transcode)
+                .attr('stop-opacity', 0);
+
+            damageGradient.append('stop')
+                .attr('offset', '100%')
+                .attr('stop-color', colors.transcode)
+                .attr('stop-opacity', 0.15);
+
+            // Draw subtle gradient overlay in high frequency region only
+            // pointer-events: none so it doesn't block tooltips on data points
+            g.append('rect')
+                .attr('x', x(15000))
+                .attr('y', 0)
+                .attr('width', x(22000) - x(15000))
+                .attr('height', height)
+                .attr('fill', 'url(#damageGradient)')
+                .style('pointer-events', 'none');
+
+            // Small badge in top-right corner of chart (below other legends)
+            const badgeY = (s.upper_drop > 15 || s.ultrasonic_drop > 25) ? 25 : 5;
+            const reencBadge = svg.append('g')
+                .attr('transform', `translate(${{margin.left + width - 95}}, ${{margin.top + badgeY}})`);
+
+            reencBadge.append('rect')
+                .attr('width', 90)
+                .attr('height', 18)
+                .attr('rx', 9)
+                .attr('fill', colors.transcode)
+                .attr('opacity', 0.9);
+
+            reencBadge.append('text')
+                .attr('x', 45)
+                .attr('y', 13)
+                .attr('text-anchor', 'middle')
+                .style('fill', '#ffffff')
+                .style('font-size', '0.6rem')
+                .style('font-weight', '600')
+                .text(`${{lossyPasses}}x RE-ENCODED`);
+        }}
     }}
 
     function formatFreq(freq) {{
@@ -1291,17 +1654,197 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
         return freq + 'Hz';
     }}
 
-    // Show file details
+    // Draw encoding chain visualization
+    function drawEncodingChain(file, containerId) {{
+        containerId = containerId || 'encoding-chain-container';
+        const container = document.getElementById(containerId);
+        container.innerHTML = '';
+
+        // Show for re-encoded files OR files with spectral transcode evidence
+        const hasSpectralEvidence = file.spectral && (file.spectral.upper_drop > 15 || file.spectral.ultrasonic_drop > 25);
+        const hasBinaryEvidence = file.binary && file.binary.reencoded;
+        const isTranscode = file.verdict === 'Transcode' || file.verdict === 'Suspect';
+
+        if (!hasBinaryEvidence && !hasSpectralEvidence && !isTranscode) {{
+            return;
+        }}
+
+        const arrowSvg = `<svg viewBox="0 0 32 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M0 10H28M28 10L20 2M28 10L20 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>`;
+
+        // Build encoding chain from detected signatures
+        const chain = [];
+
+        // Add source (always starts with some source)
+        chain.push({{
+            name: 'Original',
+            type: 'source',
+            quality: 'Lossless/Unknown',
+            tooltip: 'Original audio source'
+        }});
+
+        // Check if we have binary evidence or only spectral evidence
+        if (hasBinaryEvidence && file.binary.lame_occurrences > 0) {{
+            // Parse the encoding chain from binary signatures
+            for (let i = 0; i < file.binary.lame_occurrences; i++) {{
+                const isFirst = i === 0;
+                const qualityLoss = i === 0 ? 'First lossy encode' : `Pass ${{i + 1}} - cumulative loss`;
+                chain.push({{
+                    name: i === 0 ? (file.encoder || 'LAME') : 'LAME',
+                    type: isFirst ? 'lossy' : 'final',
+                    quality: qualityLoss,
+                    tooltip: isFirst ? 'Initial MP3 encoding' : 'Re-encoding causes additional quality loss'
+                }});
+            }}
+
+            if (file.binary.ffmpeg_occurrences > 0) {{
+                for (let i = 0; i < file.binary.ffmpeg_occurrences; i++) {{
+                    chain.push({{
+                        name: 'FFmpeg',
+                        type: 'final',
+                        quality: `Processing pass ${{i + 1}}`,
+                        tooltip: 'FFmpeg transcoding/processing'
+                    }});
+                }}
+            }}
+        }} else if (hasSpectralEvidence || isTranscode) {{
+            // Spectral evidence only - show suspected chain
+            chain.push({{
+                name: '??? Lossy',
+                type: 'lossy',
+                quality: 'Unknown codec/bitrate',
+                tooltip: 'Spectral analysis indicates prior lossy encoding - codec unknown'
+            }});
+
+            // If there's significant upper drop, likely multiple passes
+            if (file.spectral && file.spectral.upper_drop > 25) {{
+                chain.push({{
+                    name: '??? Lossy',
+                    type: 'final',
+                    quality: 'Additional encoding suspected',
+                    tooltip: 'Severe frequency loss suggests multiple lossy passes'
+                }});
+            }}
+
+            chain.push({{
+                name: file.encoder || 'LAME',
+                type: 'final',
+                quality: `Final encode (${{file.bitrate}}kbps)`,
+                tooltip: 'Final encoding to current format'
+            }});
+        }}
+
+        // If we have a simple LAME + FFmpeg case from binary, ensure we show it
+        if (hasBinaryEvidence && chain.length === 1 && file.binary.encoder_count > 1) {{
+            chain.push({{
+                name: file.encoder || 'Encoder 1',
+                type: 'lossy',
+                quality: 'First encode',
+                tooltip: 'Initial lossy encoding'
+            }});
+            chain.push({{
+                name: 'Encoder 2',
+                type: 'final',
+                quality: 'Re-encode',
+                tooltip: 'Additional lossy encoding'
+            }});
+        }}
+
+        // Calculate cumulative quality loss estimate
+        const lossyPasses = chain.filter(c => c.type !== 'source').length;
+        const qualityEstimate = Math.max(0, 100 - (lossyPasses * 15)); // Rough estimate: 15% loss per pass
+
+        const titleText = hasBinaryEvidence
+            ? 'Encoding History Detected - File Has Been Re-encoded'
+            : 'Transcoding Evidence - Spectral Analysis Indicates Prior Lossy Encoding';
+
+        const subtitleHtml = hasBinaryEvidence
+            ? ''
+            : '<div style="font-size: 0.75rem; color: var(--dim); margin-top: 0.25rem; margin-bottom: 0.5rem;">Intermediate codec signatures not preserved in final MP3 - chain reconstructed from frequency damage</div>';
+
+        let html = `
+            <div class="encoding-chain-viz">
+                <div class="encoding-chain-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                    ${{titleText}}
+                </div>
+                ${{subtitleHtml}}
+                <div class="chain-timeline">
+        `;
+
+        chain.forEach((node, idx) => {{
+            html += `
+                <div class="chain-node">
+                    <div class="chain-encoder ${{node.type}}" title="${{node.tooltip}}">
+                        ${{node.name}}
+                    </div>
+                    <div class="chain-quality ${{node.type === 'final' ? 'degraded' : ''}}">${{node.quality}}</div>
+                </div>
+            `;
+
+            if (idx < chain.length - 1) {{
+                const lossLabel = idx === 0 ? 'encode' : 'transcode';
+                html += `
+                    <div class="chain-arrow">
+                        ${{arrowSvg}}
+                        <span class="chain-arrow-label">${{lossLabel}}</span>
+                    </div>
+                `;
+            }}
+        }});
+
+        html += `
+                </div>
+                <div style="margin-top: 1rem;">
+                    <div style="font-size: 0.75rem; color: var(--dim); margin-bottom: 0.5rem;">
+                        Estimated Quality Retention After ${{lossyPasses}} Lossy Pass${{lossyPasses > 1 ? 'es' : ''}}
+                    </div>
+                    <div class="cumulative-damage-bar">
+                        <div class="damage-marker" style="left: ${{qualityEstimate}}%;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.625rem; color: var(--dim); margin-top: 0.25rem;">
+                        <span>0% (Destroyed)</span>
+                        <span style="color: var(--transcode); font-weight: 600;">~${{qualityEstimate}}%</span>
+                        <span>100% (Original)</span>
+                    </div>
+                </div>
+                <div class="chain-legend">
+                    <div class="chain-legend-item">
+                        <div class="chain-legend-dot" style="background: var(--ok);"></div>
+                        <span>Source</span>
+                    </div>
+                    <div class="chain-legend-item">
+                        <div class="chain-legend-dot" style="background: var(--suspect);"></div>
+                        <span>First Lossy Encode</span>
+                    </div>
+                    <div class="chain-legend-item">
+                        <div class="chain-legend-dot" style="background: var(--transcode);"></div>
+                        <span>Re-encode (Quality Loss)</span>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        container.innerHTML = html;
+    }}
+
+    // Show file details in slide-down panel (for chart/waterfall clicks)
     function showDetail(file) {{
         const panel = document.getElementById('detail-panel');
         panel.classList.add('active');
         document.getElementById('detail-filename').textContent = file.filename;
 
+        drawEncodingChain(file, 'encoding-chain-container');
         drawFrequencyResponseCurve(file);
         drawFileSpectrum(file);
 
         const detailsHtml = `
-            <div style="display: grid; gap: 1rem;">
+            <div style="display: grid; gap: 0.75rem;">
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
                     <div style="color: var(--dim);">Verdict:</div>
                     <div><span class="verdict ${{file.verdict.toLowerCase()}}">${{file.verdict}}</span></div>
@@ -1314,41 +1857,18 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
                     ${{file.lowpass ? `<div style="color: var(--dim);">Lowpass:</div><div>${{file.lowpass}} Hz</div>` : ''}}
                 </div>
                 ${{file.spectral ? `
-                <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
-                    <div style="font-weight: 600; margin-bottom: 0.5rem;">Spectral Analysis</div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.875rem;">
+                <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border);">
+                    <div style="font-weight: 600; margin-bottom: 0.5rem; font-size: 0.875rem;">Spectral Analysis</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.375rem; font-size: 0.8125rem;">
                         <div style="color: var(--dim);">Upper Drop:</div>
                         <div style="color: ${{file.spectral.upper_drop > 15 ? 'var(--transcode)' : 'var(--ok)'}}">${{file.spectral.upper_drop.toFixed(1)}} dB</div>
                         <div style="color: var(--dim);">Ultrasonic Drop:</div>
                         <div style="color: ${{file.spectral.ultrasonic_drop > 25 ? 'var(--transcode)' : 'var(--ok)'}}">${{file.spectral.ultrasonic_drop.toFixed(1)}} dB</div>
-                        <div style="color: var(--dim);">Flatness (19-21k):</div>
-                        <div style="color: ${{file.spectral.ultrasonic_flatness < 0.3 ? 'var(--transcode)' : 'var(--ok)'}}">${{file.spectral.ultrasonic_flatness.toFixed(3)}}</div>
                     </div>
-                </div>
-                ` : ''}}
-                ${{file.binary_score > 0 || file.lowpass ? `
-                <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
-                    <div style="font-weight: 600; margin-bottom: 0.5rem;">Binary Analysis (MP3)</div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.875rem;">
-                        <div style="color: var(--dim);">Encoder:</div>
-                        <div style="font-family: monospace;">${{file.encoder || 'Unknown'}}</div>
-                        ${{file.lowpass ? `
-                        <div style="color: var(--dim);">Lowpass Filter:</div>
-                        <div style="color: ${{file.lowpass < 19000 ? 'var(--transcode)' : 'var(--ok)'}}">${{file.lowpass}} Hz</div>
-                        ` : ''}}
-                        <div style="color: var(--dim);">Binary Score:</div>
-                        <div style="color: ${{file.binary_score > 20 ? 'var(--transcode)' : 'var(--ok)'}}">${{file.binary_score}}%</div>
-                    </div>
-                    ${{file.lowpass && file.lowpass < 19000 ? `
-                    <div style="margin-top: 0.75rem; padding: 0.5rem; background: rgba(239,68,68,0.1); border-radius: 4px; font-size: 0.8rem; color: var(--transcode);">
-                        ⚠️ Low lowpass frequency suggests this was transcoded from a lower bitrate source
-                    </div>
-                    ` : ''}}
                 </div>
                 ` : ''}}
                 ${{file.flags.length > 0 ? `
-                <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
-                    <div style="font-weight: 600; margin-bottom: 0.5rem;">Flags</div>
+                <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border);">
                     <div class="flags">${{file.flags.map(f => `<span class="flag">${{f}}</span>`).join('')}}</div>
                 </div>
                 ` : ''}}
@@ -1366,6 +1886,87 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
         document.getElementById('detail-panel').classList.remove('active');
         document.querySelectorAll('#results-table tr').forEach(tr => tr.classList.remove('selected'));
     }}
+
+    // Show quick view modal (for table row clicks)
+    function showQuickModal(file) {{
+        const modal = document.getElementById('quick-modal');
+        const overlay = document.getElementById('modal-overlay');
+
+        overlay.classList.add('active');
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+
+        document.getElementById('modal-filename').textContent = file.filename;
+        document.getElementById('modal-verdict').innerHTML = `<span class="verdict ${{file.verdict.toLowerCase()}}">${{file.verdict}}</span>`;
+
+        // Build compact stats row
+        const statsHtml = `
+            <div class="modal-stat">
+                <div class="modal-stat-value" style="color: ${{file.score >= 65 ? 'var(--transcode)' : file.score >= 35 ? 'var(--suspect)' : 'var(--ok)'}}">${{file.score}}%</div>
+                <div class="modal-stat-label">Score</div>
+            </div>
+            <div class="modal-stat">
+                <div class="modal-stat-value">${{file.bitrate}}</div>
+                <div class="modal-stat-label">kbps</div>
+            </div>
+            <div class="modal-stat">
+                <div class="modal-stat-value" style="font-size: 0.875rem; font-family: monospace;">${{file.encoder || '—'}}</div>
+                <div class="modal-stat-label">Encoder</div>
+            </div>
+            <div class="modal-stat">
+                <div class="modal-stat-value">${{file.lowpass ? (file.lowpass/1000).toFixed(1) + 'k' : '—'}}</div>
+                <div class="modal-stat-label">Lowpass</div>
+            </div>
+        `;
+        document.getElementById('modal-stats').innerHTML = statsHtml;
+
+        // Build compact details
+        let detailsHtml = '';
+
+        if (file.flags.length > 0) {{
+            detailsHtml += `<div style="margin-bottom: 1rem;"><div class="flags">${{file.flags.map(f => `<span class="flag">${{f}}</span>`).join('')}}</div></div>`;
+        }}
+
+        if (file.spectral) {{
+            const warnings = [];
+            if (file.spectral.upper_drop > 15) warnings.push(`Upper drop: <strong>${{file.spectral.upper_drop.toFixed(1)}} dB</strong>`);
+            if (file.spectral.ultrasonic_drop > 25) warnings.push(`Ultrasonic drop: <strong>${{file.spectral.ultrasonic_drop.toFixed(1)}} dB</strong>`);
+            if (file.lowpass && file.lowpass < 19000) warnings.push(`Low lowpass: <strong>${{file.lowpass}} Hz</strong>`);
+            if (warnings.length > 0) {{
+                detailsHtml += `
+                    <div style="background: rgba(255,59,48,0.08); border-radius: 10px; padding: 0.875rem;">
+                        <div style="font-size: 0.75rem; font-weight: 600; color: var(--transcode); margin-bottom: 0.375rem;">⚠️ Issues Detected</div>
+                        <div style="font-size: 0.8125rem;">${{warnings.join(' · ')}}</div>
+                    </div>
+                `;
+            }}
+        }}
+
+        document.getElementById('modal-details').innerHTML = detailsHtml;
+
+        // Draw encoding chain in modal
+        drawEncodingChain(file, 'modal-encoding-chain');
+
+        // Highlight table row
+        document.querySelectorAll('#results-table tr').forEach(tr => tr.classList.remove('selected'));
+        const row = document.querySelector(`#results-table tr[data-file="${{file.filename}}"]`);
+        if (row) row.classList.add('selected');
+    }}
+
+    function closeQuickModal() {{
+        document.getElementById('quick-modal').classList.remove('active');
+        document.getElementById('modal-overlay').classList.remove('active');
+        document.body.style.overflow = '';
+        document.querySelectorAll('#results-table tr').forEach(tr => tr.classList.remove('selected'));
+    }}
+
+    // Close modal on Escape key
+    document.addEventListener('keydown', function(e) {{
+        if (e.key === 'Escape') {{
+            closeQuickModal();
+            closeDetail();
+        }}
+    }});
 
     // Tooltip
     function showTooltip(event, text) {{
@@ -1406,7 +2007,7 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
                 <td class="flags">${{flagsHtml}}</td>
                 <td class="filepath" title="${{file.filepath}}">${{file.filename}}</td>
             `;
-            tr.onclick = () => showDetail(file);
+            tr.onclick = () => showQuickModal(file);
             tbody.appendChild(tr);
         }});
     }}
@@ -1456,6 +2057,31 @@ fn build_json_data(results: &[&AnalysisResult]) -> String {
             "null".to_string()
         };
 
+        // Build binary details JSON with encoding history
+        let binary = if let Some(ref b) = r.binary_details {
+            format!(r#"{{
+                "lowpass": {},
+                "expected_lowpass": {},
+                "encoder_count": {},
+                "is_vbr": {},
+                "lame_occurrences": {},
+                "ffmpeg_occurrences": {},
+                "encoding_chain": {},
+                "reencoded": {}
+            }}"#,
+                b.lowpass.map(|l| l.to_string()).unwrap_or_else(|| "null".to_string()),
+                b.expected_lowpass.map(|l| l.to_string()).unwrap_or_else(|| "null".to_string()),
+                b.encoder_count,
+                b.is_vbr,
+                b.lame_occurrences,
+                b.ffmpeg_occurrences,
+                b.encoding_chain.as_ref().map(|c| format!("\"{}\"", json_escape(c))).unwrap_or_else(|| "null".to_string()),
+                b.reencoded
+            )
+        } else {
+            "null".to_string()
+        };
+
         let flags: Vec<String> = r.flags.iter().map(|f| format!("\"{}\"", f)).collect();
 
         format!(r#"{{
@@ -1469,7 +2095,8 @@ fn build_json_data(results: &[&AnalysisResult]) -> String {
             "encoder": "{}",
             "lowpass": {},
             "flags": [{}],
-            "spectral": {}
+            "spectral": {},
+            "binary": {}
         }}"#,
             json_escape(&r.file_name),
             json_escape(&r.file_path),
@@ -1481,7 +2108,8 @@ fn build_json_data(results: &[&AnalysisResult]) -> String {
             json_escape(&r.encoder),
             r.lowpass.map(|l| l.to_string()).unwrap_or_else(|| "null".to_string()),
             flags.join(","),
-            spectral
+            spectral,
+            binary
         )
     }).collect();
 

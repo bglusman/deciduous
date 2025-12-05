@@ -38,6 +38,12 @@ pub struct EncoderSignatures {
     pub ffmpeg: bool,
     pub xing: bool,
     pub other: Vec<String>,
+    /// All encoder strings found (for detecting re-encoding)
+    pub all_encoders: Vec<String>,
+    /// Number of times LAME signature appears (multiple = re-encoded)
+    pub lame_count: usize,
+    /// Number of times Lavf/Lavc appears (FFmpeg processing)
+    pub lavf_count: usize,
 }
 
 impl Default for EncoderSignatures {
@@ -49,6 +55,75 @@ impl Default for EncoderSignatures {
             ffmpeg: false,
             xing: false,
             other: Vec::new(),
+            all_encoders: Vec::new(),
+            lame_count: 0,
+            lavf_count: 0,
+        }
+    }
+}
+
+impl EncoderSignatures {
+    /// Check if file shows evidence of re-encoding
+    ///
+    /// Re-encoding indicators:
+    /// - Multiple LAME headers (encoded more than once with LAME)
+    /// - Multiple Lavf headers (processed multiple times by FFmpeg)
+    /// - Mixed encoder chain (e.g., LAME + FFmpeg = transcoded)
+    pub fn shows_reencoding(&self) -> bool {
+        // Multiple occurrences of same encoder
+        if self.lame_count > 1 || self.lavf_count > 1 {
+            return true;
+        }
+
+        // Mixed encoder chain (different encoders touched the file)
+        let encoder_count = self.unique_encoder_count();
+        encoder_count > 1
+    }
+
+    /// Count unique encoders that touched this file
+    pub fn unique_encoder_count(&self) -> usize {
+        let mut count = 0;
+        if self.lame.is_some() { count += 1; }
+        if self.fraunhofer { count += 1; }
+        if self.itunes { count += 1; }
+        if self.ffmpeg { count += 1; }
+        count
+    }
+
+    /// Get a human-readable encoding chain description
+    pub fn encoding_chain_description(&self) -> Option<String> {
+        if !self.shows_reencoding() {
+            return None;
+        }
+
+        let mut parts = Vec::new();
+
+        if self.lame_count > 1 {
+            parts.push(format!("LAME x{}", self.lame_count));
+        } else if self.lame.is_some() {
+            parts.push("LAME".to_string());
+        }
+
+        if self.lavf_count > 1 {
+            parts.push(format!("FFmpeg x{}", self.lavf_count));
+        } else if self.ffmpeg {
+            parts.push("FFmpeg".to_string());
+        }
+
+        if self.fraunhofer {
+            parts.push("Fraunhofer".to_string());
+        }
+
+        if self.itunes {
+            parts.push("iTunes".to_string());
+        }
+
+        if parts.len() > 1 {
+            Some(parts.join(" → "))
+        } else if self.lame_count > 1 || self.lavf_count > 1 {
+            Some(parts.join(""))
+        } else {
+            None
         }
     }
 }
@@ -198,6 +273,10 @@ impl LameHeader {
 }
 
 /// Scan file for all encoder signatures
+///
+/// This function not only detects which encoders touched a file, but also
+/// counts how many times each encoder signature appears. Multiple occurrences
+/// of the same encoder suggest the file was re-encoded multiple times.
 pub fn scan_encoder_signatures<R: Read + Seek>(reader: &mut R) -> io::Result<EncoderSignatures> {
     let mut sigs = EncoderSignatures::default();
 
@@ -210,32 +289,59 @@ pub fn scan_encoder_signatures<R: Read + Seek>(reader: &mut R) -> io::Result<Enc
     // Convert to string for pattern matching (lossy is fine, we're looking for ASCII)
     let text = String::from_utf8_lossy(&buf);
 
-    // LAME - extract version
-    if let Some(pos) = find_pattern(&buf, b"LAME") {
+    // Count LAME signatures more carefully:
+    // Only count "LAME3." or "LAME " patterns (actual encoder tags)
+    // This avoids false positives from random audio data matching "LAME"
+    sigs.lame_count = count_valid_lame_signatures(&buf);
+
+    // Extract first LAME version for display
+    if let Some(pos) = find_pattern(&buf, b"LAME3.") {
         let end = (pos + 20).min(buf.len());
         if let Ok(s) = std::str::from_utf8(&buf[pos..end]) {
             let version: String = s.chars()
                 .take_while(|c| c.is_ascii_alphanumeric() || *c == '.' || *c == '-')
                 .collect();
             if !version.is_empty() {
-                sigs.lame = Some(version);
+                sigs.lame = Some(version.clone());
+                sigs.all_encoders.push(version);
+            }
+        }
+    } else if let Some(pos) = find_pattern(&buf, b"LAME") {
+        // Fallback to generic LAME if no version found
+        let end = (pos + 20).min(buf.len());
+        if let Ok(s) = std::str::from_utf8(&buf[pos..end]) {
+            let version: String = s.chars()
+                .take_while(|c| c.is_ascii_alphanumeric() || *c == '.' || *c == '-')
+                .collect();
+            if !version.is_empty() {
+                sigs.lame = Some(version.clone());
+                sigs.all_encoders.push(version);
             }
         }
     }
 
+    // Count Lavf/Lavc occurrences (FFmpeg processing)
+    // These are more specific patterns so less prone to false positives
+    sigs.lavf_count = count_valid_ffmpeg_signatures(&buf);
+
     // Fraunhofer
     if text.contains("Fraunhofer") || text.contains("FhG") {
         sigs.fraunhofer = true;
+        sigs.all_encoders.push("Fraunhofer".to_string());
     }
 
     // iTunes
-    if text.contains("iTunes") || text.contains("Lavf") && text.contains("Apple") {
+    if text.contains("iTunes") || (text.contains("Lavf") && text.contains("Apple")) {
         sigs.itunes = true;
+        sigs.all_encoders.push("iTunes".to_string());
     }
 
     // FFmpeg/Lavf
-    if text.contains("Lavf") || text.contains("libmp3lame") {
+    if text.contains("Lavf") || text.contains("Lavc") || text.contains("libmp3lame") {
         sigs.ffmpeg = true;
+        if !sigs.all_encoders.iter().any(|e| e.contains("FFmpeg")) {
+            sigs.all_encoders.push("FFmpeg".to_string());
+        }
     }
 
     // Xing (sometimes standalone)
@@ -244,6 +350,87 @@ pub fn scan_encoder_signatures<R: Read + Seek>(reader: &mut R) -> io::Result<Enc
     }
 
     Ok(sigs)
+}
+
+/// Count how many times a pattern appears in the buffer
+pub fn count_pattern_occurrences(haystack: &[u8], needle: &[u8]) -> usize {
+    if needle.is_empty() || haystack.len() < needle.len() {
+        return 0;
+    }
+
+    let mut count = 0;
+    let mut pos = 0;
+
+    while pos <= haystack.len() - needle.len() {
+        if let Some(found) = find_pattern(&haystack[pos..], needle) {
+            count += 1;
+            pos += found + needle.len(); // Move past this occurrence
+        } else {
+            break;
+        }
+    }
+
+    count
+}
+
+/// Count valid LAME encoder signatures (more specific than just "LAME")
+///
+/// To avoid false positives from random audio data, we ONLY search in the
+/// first 4KB (header region) where encoder tags actually appear. Audio
+/// data beyond this can contain random bytes that match "LAME" patterns.
+fn count_valid_lame_signatures(buf: &[u8]) -> usize {
+    // Only search in header region to avoid false positives from audio data
+    // MP3 encoder tags appear in first few KB (VBR header, ID3 tags, etc.)
+    let header_region = &buf[..buf.len().min(4096)];
+
+    let mut count = 0;
+
+    // Count "LAME3." patterns (LAME 3.x versions - most common)
+    count += count_pattern_occurrences(header_region, b"LAME3.");
+
+    // Count "LAME " patterns (space after LAME indicates tag)
+    if count == 0 {
+        count += count_pattern_occurrences(header_region, b"LAME ");
+    }
+
+    // Also check for older LAME versions (rare but possible)
+    count += count_pattern_occurrences(header_region, b"LAME2.");
+
+    // If still 0, check for bare LAME
+    if count == 0 {
+        if find_pattern(header_region, b"LAME").is_some() {
+            count = 1;
+        }
+    }
+
+    count
+}
+
+/// Count valid FFmpeg signatures (Lavf/Lavc patterns)
+///
+/// FFmpeg signatures appear in the header region. We limit our search
+/// to the first 4KB to avoid false positives from audio data.
+fn count_valid_ffmpeg_signatures(buf: &[u8]) -> usize {
+    // Only search in header region
+    let header_region = &buf[..buf.len().min(4096)];
+
+    // Count Lavf patterns (format library)
+    let lavf_count = count_pattern_occurrences(header_region, b"Lavf");
+
+    // Count Lavc patterns (codec library)
+    let lavc_count = count_pattern_occurrences(header_region, b"Lavc");
+
+    // Both usually appear together, so take the max rather than sum
+    // to avoid double-counting the same encoding pass
+    let mut count = lavf_count.max(lavc_count);
+
+    // But if both appear more times than expected, count separately
+    // (indicates multiple FFmpeg passes)
+    if lavf_count > 1 && lavc_count > 1 {
+        count = lavf_count + lavc_count;
+    }
+
+    count
 }
 
 /// Count unique encoder signatures in file
@@ -756,5 +943,245 @@ mod tests {
 
         // Invalid: 0 (would mean no lowpass, likely garbage)
         assert!(!is_valid_lowpass_byte(0), "0 should be invalid");
+    }
+
+    // ==========================================================================
+    // RE-ENCODING DETECTION TESTS
+    // ==========================================================================
+    //
+    // These tests verify the ability to detect files that have been encoded
+    // multiple times. This addresses the scenario: "what if a lossy file was
+    // encoded previously at a *higher* rate?"
+    //
+    // Detection methods:
+    // 1. Multiple LAME signatures = encoded multiple times with LAME
+    // 2. Multiple Lavf signatures = processed multiple times by FFmpeg
+    // 3. Mixed encoders (LAME + FFmpeg) = transcoded through different tools
+    // ==========================================================================
+
+    #[test]
+    fn test_encoder_signatures_default() {
+        let sigs = EncoderSignatures::default();
+
+        assert!(sigs.lame.is_none());
+        assert!(!sigs.fraunhofer);
+        assert!(!sigs.itunes);
+        assert!(!sigs.ffmpeg);
+        assert!(!sigs.xing);
+        assert_eq!(sigs.lame_count, 0);
+        assert_eq!(sigs.lavf_count, 0);
+        assert!(sigs.all_encoders.is_empty());
+    }
+
+    #[test]
+    fn test_shows_reencoding_single_encoder() {
+        // Single encoder = NOT re-encoded
+        let mut sigs = EncoderSignatures::default();
+        sigs.lame = Some("LAME3.100".to_string());
+        sigs.lame_count = 1;
+
+        assert!(!sigs.shows_reencoding(), "Single LAME encode should not be flagged");
+        assert_eq!(sigs.unique_encoder_count(), 1);
+    }
+
+    #[test]
+    fn test_shows_reencoding_multiple_lame_passes() {
+        // SCENARIO: File was encoded with LAME, converted to WAV, then
+        // re-encoded with LAME again (maybe at higher bitrate).
+        // This should be detected!
+
+        let mut sigs = EncoderSignatures::default();
+        sigs.lame = Some("LAME3.100".to_string());
+        sigs.lame_count = 2; // Two LAME headers found!
+
+        assert!(sigs.shows_reencoding(), "Multiple LAME passes should be flagged");
+    }
+
+    #[test]
+    fn test_shows_reencoding_multiple_ffmpeg_passes() {
+        // SCENARIO: File was processed through FFmpeg multiple times
+        // (e.g., format conversion, then later another conversion)
+
+        let mut sigs = EncoderSignatures::default();
+        sigs.ffmpeg = true;
+        sigs.lavf_count = 3; // Three FFmpeg processings!
+
+        assert!(sigs.shows_reencoding(), "Multiple FFmpeg passes should be flagged");
+    }
+
+    #[test]
+    fn test_shows_reencoding_mixed_encoders() {
+        // SCENARIO: File was encoded with LAME, then processed by FFmpeg
+        // (common when someone transcodes: LAME → WAV → FFmpeg)
+
+        let mut sigs = EncoderSignatures::default();
+        sigs.lame = Some("LAME3.100".to_string());
+        sigs.lame_count = 1;
+        sigs.ffmpeg = true;
+        sigs.lavf_count = 1;
+
+        assert!(sigs.shows_reencoding(), "Mixed LAME + FFmpeg should be flagged");
+        assert_eq!(sigs.unique_encoder_count(), 2);
+    }
+
+    #[test]
+    fn test_encoding_chain_description_single() {
+        // Single encoder = no chain to report
+        let mut sigs = EncoderSignatures::default();
+        sigs.lame = Some("LAME3.100".to_string());
+        sigs.lame_count = 1;
+
+        assert!(sigs.encoding_chain_description().is_none());
+    }
+
+    #[test]
+    fn test_encoding_chain_description_lame_to_ffmpeg() {
+        // Common transcode pattern: LAME → FFmpeg
+        let mut sigs = EncoderSignatures::default();
+        sigs.lame = Some("LAME3.100".to_string());
+        sigs.lame_count = 1;
+        sigs.ffmpeg = true;
+        sigs.lavf_count = 1;
+
+        let chain = sigs.encoding_chain_description();
+        assert!(chain.is_some());
+        assert!(chain.as_ref().unwrap().contains("LAME"));
+        assert!(chain.as_ref().unwrap().contains("FFmpeg"));
+        assert!(chain.unwrap().contains("→"), "Should show chain with arrow");
+    }
+
+    #[test]
+    fn test_encoding_chain_description_multiple_lame() {
+        // File encoded twice with LAME
+        let mut sigs = EncoderSignatures::default();
+        sigs.lame = Some("LAME3.100".to_string());
+        sigs.lame_count = 3;
+
+        let chain = sigs.encoding_chain_description();
+        assert!(chain.is_some());
+        assert!(chain.as_ref().unwrap().contains("LAME x3"));
+    }
+
+    #[test]
+    fn test_encoding_chain_description_complex() {
+        // Complex chain: LAME → FFmpeg → Fraunhofer
+        let mut sigs = EncoderSignatures::default();
+        sigs.lame = Some("LAME3.100".to_string());
+        sigs.lame_count = 1;
+        sigs.ffmpeg = true;
+        sigs.lavf_count = 1;
+        sigs.fraunhofer = true;
+
+        let chain = sigs.encoding_chain_description();
+        assert!(chain.is_some());
+        // Should include all encoders
+        let desc = chain.unwrap();
+        assert!(desc.contains("LAME"));
+        assert!(desc.contains("FFmpeg"));
+        assert!(desc.contains("Fraunhofer"));
+    }
+
+    #[test]
+    fn test_count_pattern_occurrences_none() {
+        let data = b"hello world this has no encoder signatures";
+        let count = count_pattern_occurrences(data, b"LAME");
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn test_count_pattern_occurrences_single() {
+        let data = b"header stuff LAME3.100 more stuff";
+        let count = count_pattern_occurrences(data, b"LAME");
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_count_pattern_occurrences_multiple() {
+        // Simulates a file that was encoded with LAME twice
+        let data = b"header LAME3.99r padding LAME3.100 more LAME3.100 end";
+        let count = count_pattern_occurrences(data, b"LAME");
+        assert_eq!(count, 3);
+    }
+
+    #[test]
+    fn test_scan_encoder_signatures_counts_lame() {
+        // Create buffer with multiple LAME signatures
+        let mut data = vec![0u8; 2000];
+        data[100..109].copy_from_slice(b"LAME3.99r");
+        data[500..509].copy_from_slice(b"LAME3.100");
+
+        let mut cursor = Cursor::new(data);
+        let sigs = scan_encoder_signatures(&mut cursor).expect("Should scan");
+
+        assert_eq!(sigs.lame_count, 2, "Should count both LAME occurrences");
+        assert!(sigs.shows_reencoding(), "Multiple LAME = re-encoding");
+    }
+
+    #[test]
+    fn test_scan_encoder_signatures_counts_lavf() {
+        // Create buffer with multiple Lavf signatures (FFmpeg)
+        // New counting logic: takes max(Lavf, Lavc) unless both > 1
+        let mut data = vec![0u8; 2000];
+        data[100..104].copy_from_slice(b"Lavf");
+        data[500..504].copy_from_slice(b"Lavf");
+        data[800..804].copy_from_slice(b"Lavc");
+
+        let mut cursor = Cursor::new(data);
+        let sigs = scan_encoder_signatures(&mut cursor).expect("Should scan");
+
+        // 2 Lavf, 1 Lavc -> max(2, 1) = 2 (Lavc count not > 1, so no sum)
+        assert_eq!(sigs.lavf_count, 2, "Should count max of Lavf/Lavc");
+        assert!(sigs.shows_reencoding(), "Multiple FFmpeg passes = re-encoding");
+    }
+
+    // ==========================================================================
+    // SCENARIO: Higher bitrate re-encode detection
+    // ==========================================================================
+    //
+    // This is the key scenario from user feedback:
+    // "what if a lossy file was encoded previously at a *higher* rate?"
+    //
+    // Example: Someone has a 320kbps MP3, converts to WAV, then re-encodes
+    // as 192kbps to "save space". The result is worse than original 192kbps
+    // because it went through lossy compression twice.
+    //
+    // Detection: Multiple encoder signatures reveal the re-encoding chain,
+    // even if we can't determine the exact original bitrate.
+    // ==========================================================================
+
+    #[test]
+    fn test_scenario_320_to_wav_to_192() {
+        // SCENARIO: 320kbps LAME → WAV → 192kbps FFmpeg
+        // This is detectable because both encoder signatures are present
+
+        let mut sigs = EncoderSignatures::default();
+        sigs.lame = Some("LAME3.100".to_string());
+        sigs.lame_count = 1;
+        sigs.ffmpeg = true;
+        sigs.lavf_count = 1;
+
+        assert!(sigs.shows_reencoding());
+        assert_eq!(sigs.unique_encoder_count(), 2);
+
+        let chain = sigs.encoding_chain_description().unwrap();
+        assert!(chain.contains("LAME → FFmpeg"));
+    }
+
+    #[test]
+    fn test_scenario_multiple_lame_encodes() {
+        // SCENARIO: File encoded multiple times with LAME
+        // 320kbps → WAV → 256kbps → WAV → 192kbps
+        // Each LAME pass leaves a header
+
+        let mut sigs = EncoderSignatures::default();
+        sigs.lame = Some("LAME3.100".to_string());
+        sigs.lame_count = 3; // Three LAME headers!
+
+        assert!(sigs.shows_reencoding());
+        assert_eq!(sigs.unique_encoder_count(), 1); // Same encoder...
+        // ...but multiple passes!
+
+        let chain = sigs.encoding_chain_description().unwrap();
+        assert!(chain.contains("LAME x3"));
     }
 }

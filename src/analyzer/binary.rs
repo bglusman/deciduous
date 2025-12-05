@@ -38,6 +38,14 @@ pub struct BinaryDetails {
     pub frame_size_cv: f64,
     pub is_vbr: bool,
     pub total_frames: Option<u32>,
+    /// Number of times LAME signature appears (>1 = re-encoded)
+    pub lame_occurrences: usize,
+    /// Number of times FFmpeg/Lavf signature appears
+    pub ffmpeg_occurrences: usize,
+    /// Human-readable encoding chain (e.g., "LAME → FFmpeg")
+    pub encoding_chain: Option<String>,
+    /// True if file shows evidence of re-encoding
+    pub reencoded: bool,
 }
 
 pub struct BinaryResult {
@@ -111,13 +119,44 @@ pub fn analyze<R: Read + Seek>(data: &[u8], reader: &mut R, bitrate: u32) -> Bin
         }
     }
 
-    // Check for multiple encoder signatures
+    // =========================================================================
+    // RE-ENCODING DETECTION
+    // =========================================================================
+    // Scan for encoder signatures and count occurrences.
+    // Multiple occurrences or mixed encoders indicate re-encoding.
+    // =========================================================================
     reader.seek(std::io::SeekFrom::Start(0)).ok();
-    if let Ok(count) = lame::count_encoder_signatures(reader) {
-        result.details.encoder_count = count;
-        if count > 1 {
-            result.score += 20;
-            result.flags.push("multi_encoder_sigs".to_string());
+    if let Ok(sigs) = lame::scan_encoder_signatures(reader) {
+        result.details.encoder_count = sigs.unique_encoder_count();
+        result.details.lame_occurrences = sigs.lame_count;
+        result.details.ffmpeg_occurrences = sigs.lavf_count;
+        result.details.encoding_chain = sigs.encoding_chain_description();
+        result.details.reencoded = sigs.shows_reencoding();
+
+        // Score for re-encoding evidence
+        if sigs.shows_reencoding() {
+            // Multiple encoder signatures = file was processed multiple times
+            if sigs.unique_encoder_count() > 1 {
+                result.score += 20;
+                result.flags.push("multi_encoder_sigs".to_string());
+            }
+
+            // Multiple LAME passes = encoded more than once with LAME
+            if sigs.lame_count > 1 {
+                result.score += 15;
+                result.flags.push(format!("lame_reencoded_x{}", sigs.lame_count));
+            }
+
+            // Multiple FFmpeg passes = processed multiple times
+            if sigs.lavf_count > 1 {
+                result.score += 15;
+                result.flags.push(format!("ffmpeg_processed_x{}", sigs.lavf_count));
+            }
+
+            // Encoding chain detected (LAME → FFmpeg etc)
+            if let Some(ref chain) = result.details.encoding_chain {
+                result.flags.push(format!("encoding_chain({})", chain));
+            }
         }
     }
 
@@ -478,6 +517,161 @@ mod tests {
         assert!(
             !result.flags.iter().any(|f| f.contains("lowpass_mismatch")),
             "128kbps with 16kHz lowpass is normal, should not flag"
+        );
+    }
+
+    // ==========================================================================
+    // RE-ENCODING DETECTION TESTS (Binary Analysis)
+    // ==========================================================================
+    //
+    // These tests verify that the binary analyzer correctly populates the
+    // re-encoding detection fields in BinaryDetails.
+    //
+    // The key insight: Even if a file is re-encoded at a HIGHER bitrate,
+    // the encoding chain reveals it was processed multiple times, indicating
+    // quality degradation that cannot be recovered.
+    // ==========================================================================
+
+    #[test]
+    fn test_binary_details_default() {
+        let details = BinaryDetails::default();
+
+        assert_eq!(details.lame_occurrences, 0);
+        assert_eq!(details.ffmpeg_occurrences, 0);
+        assert!(details.encoding_chain.is_none());
+        assert!(!details.reencoded);
+    }
+
+    #[test]
+    fn test_reencoding_details_populated() {
+        // Create test data with multiple encoder signatures
+        let mut data = vec![0u8; 65536];
+
+        // Add MP3 header
+        data[0..4].copy_from_slice(&[0xFF, 0xFB, 0x90, 0x00]);
+
+        // Add multiple LAME signatures (simulating re-encoding)
+        data[100..109].copy_from_slice(b"LAME3.99r");
+        data[500..509].copy_from_slice(b"LAME3.100");
+
+        // Add FFmpeg signature
+        data[1000..1004].copy_from_slice(b"Lavf");
+
+        let mut cursor = Cursor::new(data.clone());
+        let result = analyze(&data, &mut cursor, 320);
+
+        // Should detect re-encoding
+        assert!(result.details.reencoded, "Should detect re-encoding");
+        assert!(result.details.lame_occurrences >= 2, "Should count LAME occurrences");
+        assert!(result.details.ffmpeg_occurrences >= 1, "Should count FFmpeg occurrences");
+        assert!(result.details.encoding_chain.is_some(), "Should have encoding chain");
+    }
+
+    #[test]
+    fn test_reencoding_flags() {
+        // Create test data with multiple encoder signatures
+        let mut data = vec![0u8; 65536];
+        data[0..4].copy_from_slice(&[0xFF, 0xFB, 0x90, 0x00]);
+        data[100..109].copy_from_slice(b"LAME3.100");
+        data[500..504].copy_from_slice(b"Lavf");
+
+        let mut cursor = Cursor::new(data.clone());
+        let result = analyze(&data, &mut cursor, 320);
+
+        // Should have multi_encoder_sigs flag
+        assert!(
+            result.flags.iter().any(|f| f.contains("multi_encoder_sigs")),
+            "Should flag multiple encoder signatures: {:?}",
+            result.flags
+        );
+
+        // Should have encoding chain in flags
+        assert!(
+            result.flags.iter().any(|f| f.contains("encoding_chain")),
+            "Should include encoding chain in flags: {:?}",
+            result.flags
+        );
+    }
+
+    #[test]
+    fn test_multiple_lame_passes_flag() {
+        // Create test data with multiple LAME signatures
+        let mut data = vec![0u8; 65536];
+        data[0..4].copy_from_slice(&[0xFF, 0xFB, 0x90, 0x00]);
+        data[100..109].copy_from_slice(b"LAME3.99r");
+        data[500..509].copy_from_slice(b"LAME3.100");
+        data[1000..1009].copy_from_slice(b"LAME3.100");
+
+        let mut cursor = Cursor::new(data.clone());
+        let result = analyze(&data, &mut cursor, 320);
+
+        // Should flag multiple LAME passes
+        assert!(
+            result.flags.iter().any(|f| f.contains("lame_reencoded")),
+            "Should flag multiple LAME passes: {:?}",
+            result.flags
+        );
+    }
+
+    #[test]
+    fn test_reencoding_scoring() {
+        // Re-encoding should contribute to the score
+        let mut data = vec![0u8; 65536];
+        data[0..4].copy_from_slice(&[0xFF, 0xFB, 0x90, 0x00]);
+        data[100..109].copy_from_slice(b"LAME3.100");
+        data[500..504].copy_from_slice(b"Lavf");
+
+        let mut cursor = Cursor::new(data.clone());
+        let result = analyze(&data, &mut cursor, 320);
+
+        // Multi-encoder should add 20 points
+        assert!(
+            result.score >= 20,
+            "Re-encoding should add to score, got {}",
+            result.score
+        );
+    }
+
+    // ==========================================================================
+    // SCENARIO TESTS: Higher bitrate re-encoding
+    // ==========================================================================
+
+    #[test]
+    fn test_scenario_320_reencoded_to_320() {
+        // SCENARIO: Someone has a 320kbps MP3, converts to WAV, then
+        // re-encodes as 320kbps with a different encoder.
+        // Result: Same bitrate, but WORSE quality (double lossy compression)
+        //
+        // This is detectable via multiple encoder signatures!
+
+        let mut data = vec![0u8; 65536];
+        data[0..4].copy_from_slice(&[0xFF, 0xFB, 0x90, 0x00]);
+        data[100..109].copy_from_slice(b"LAME3.99r"); // Original encoder
+        data[500..504].copy_from_slice(b"Lavf");      // FFmpeg re-encode
+
+        let mut cursor = Cursor::new(data.clone());
+        let result = analyze(&data, &mut cursor, 320);
+
+        assert!(result.details.reencoded);
+        assert!(result.score >= 20, "Double-compressed file should be flagged");
+    }
+
+    #[test]
+    fn test_scenario_single_encode_not_flagged() {
+        // SCENARIO: Clean single-pass encode
+        // Should NOT be flagged as re-encoded
+
+        let mut data = vec![0u8; 65536];
+        data[0..4].copy_from_slice(&[0xFF, 0xFB, 0x90, 0x00]);
+        data[100..109].copy_from_slice(b"LAME3.100"); // Single encoder
+
+        let mut cursor = Cursor::new(data.clone());
+        let result = analyze(&data, &mut cursor, 320);
+
+        assert!(!result.details.reencoded);
+        assert!(
+            !result.flags.iter().any(|f| f.contains("lame_reencoded")),
+            "Single encode should not be flagged as re-encoded"
         );
     }
 }
