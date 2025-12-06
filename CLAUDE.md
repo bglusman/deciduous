@@ -2,6 +2,36 @@
 
 Losselot detects fake "lossless" audio files—files claiming to be lossless (FLAC, WAV, AIFF) but actually created from lossy sources (MP3, AAC). It uses dual analysis: binary metadata inspection and FFT-based spectral analysis.
 
+## Context Recovery (CRITICAL)
+
+**On every session start or after context compaction, IMMEDIATELY run:**
+
+```bash
+# 1. Query decision graph for current state
+./target/release/losselot db nodes
+./target/release/losselot db commands
+
+# 2. Check git state
+git status && git log --oneline -5
+
+# 3. Check session log
+tail -20 git.log
+```
+
+Or use the slash command: `/context`
+
+**Why this matters:**
+- The decision graph is your persistent memory across sessions
+- It contains algorithm decisions, implementation rationale, and open questions
+- Context loss leads to repeated work and lost reasoning
+- Query the graph BEFORE starting any work
+
+**What to look for:**
+- Pending decisions that need resolution
+- Recent actions and their outcomes
+- Observations that inform current work
+- Status of ongoing investigations
+
 ## Quick Reference
 
 ```bash

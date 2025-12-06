@@ -203,7 +203,61 @@ For MP3 files, Losselot reads the encoder metadata embedded in the file. The LAM
 
 **The smoking gun:** A "320kbps" MP3 with a lowpass of 16kHz was definitely transcoded from a 128kbps source. The encoder honestly reports what frequencies it kept, even when someone re-encoded to a higher bitrate.
 
-### 3. Re-encoding Detection
+### 3. Lo-Fi / Tape Detection (CFCC)
+
+Not all high-frequency rolloff means lossy compression. Tape recordings, lo-fi productions, and vintage equipment have natural rolloff that shouldn't trigger false positives.
+
+**The Problem:**
+- MP3 encoders create a "brick wall" cutoff at a fixed frequency
+- Tape/lo-fi has gradual rolloff that varies with dynamics
+- Both result in missing high frequencies - but for different reasons
+
+**The Solution: Cross-Frequency Coherence Coefficient (CFCC)**
+
+CFCC measures correlation between adjacent frequency bands:
+- **MP3**: Sudden decorrelation at the cutoff frequency (cliff)
+- **Tape**: Gradual decorrelation that follows the music's dynamics
+
+```
+MP3 @ 160kbps:     Tape/Lo-Fi:
+     |                    \
+     |                     \
+     |____                  \___
+    16kHz                   varies
+```
+
+**Scoring:**
+| Signal | Score Impact |
+|--------|--------------|
+| `cfcc_cliff` detected | +25 (strong transcode indicator) |
+| `decorrelation_spike` | +15 (supports transcode) |
+| `lofi_safe_natural_rolloff` | -15 (reduces false positives) |
+
+**Known Codec Cutoffs:**
+| Bitrate | Typical Cutoff |
+|---------|----------------|
+| 64-96 kbps | 10.5-12 kHz |
+| 128 kbps | 14-16.5 kHz |
+| 192 kbps | 16.5-18.5 kHz |
+| 256 kbps | 18-19.5 kHz |
+| 320 kbps | 19.5-21 kHz |
+
+### 4. Mixed-Source Detection (Future)
+
+Some productions mix lossy and lossless sources - for example, a beat made with MP3 samples plus live recording. The spectrogram shows "pillars" of high-frequency content punching through an otherwise limited bandwidth:
+
+```
+22kHz  |    ██     ██  ██      |  <- Lossless elements (cymbals, synths)
+       |    ██     ██  ██      |
+16kHz  |████████████████████████|  <- MP3 sample baseline
+       |████████████████████████|
+0 Hz   |████████████████████████|
+       0:00              4:00
+```
+
+This indicates the final file contains pre-lossy source material regardless of its current format.
+
+### 5. Re-encoding Detection
 
 Losselot scans for multiple encoder signatures in the file header:
 
@@ -296,6 +350,94 @@ let transcodes = db.get_results(Some("TRANSCODE"))?;
 let summary = db.get_summary()?;
 println!("{} files analyzed, {} transcodes", summary.total, summary.transcode_count);
 ```
+
+---
+
+## Decision Graph
+
+Losselot includes a built-in decision tracking system for documenting algorithm choices, research findings, and development rationale. This serves as living documentation that explains *why* things work the way they do.
+
+![Decision Graph Overview](knowledge_graph.png)
+
+### How It Works
+
+The decision graph is a directed acyclic graph (DAG) stored in SQLite that tracks the evolution of detection algorithms:
+
+**Node Types:**
+| Type | Color | Purpose |
+|------|-------|---------|
+| **Goal** | Green | High-level objectives (e.g., "Improve lo-fi detection") |
+| **Decision** | Yellow | Choice points with multiple approaches |
+| **Option** | Cyan | Possible approaches to consider |
+| **Action** | Red | Implemented changes with commit references |
+| **Outcome** | Purple | Results of actions (success/failure/learning) |
+| **Observation** | Gray | Data points, findings, technical notes |
+
+**Edge Types:**
+- `leads_to` (gray) - Natural progression between nodes
+- `chosen` (green) - Selected option from a decision
+- `rejected` (red dashed) - Option that was not selected, with rationale
+- `requires` - Dependency relationship
+- `blocks` / `enables` - Impediments or enablers
+
+### Viewing the Graph
+
+```bash
+# Web UI (interactive, with tooltips)
+make db-view
+# Or manually:
+./target/release/losselot serve . --port 3001
+# Then open http://localhost:3001/graph
+
+# CLI commands
+make db-nodes    # List all nodes
+make db-edges    # List all edges
+make db-graph    # Full graph as JSON
+```
+
+### Adding to the Graph
+
+```bash
+# Create nodes
+make goal T="Detect cassette tape artifacts"
+make decision T="Choose detection algorithm"
+make option T="Spectral slope analysis"
+make action T="Implemented in commit abc123"
+make outcome T="Passes 95% of test cases"
+make obs T="MP3 cutoff is always brick-wall"
+
+# Link nodes (FROM → TO)
+make link FROM=1 TO=2                    # Basic link
+make link FROM=2 TO=3 TYPE=chosen        # Mark as chosen
+make link FROM=2 TO=4 TYPE=rejected REASON="Too complex"
+
+# Update status
+make status ID=1 S=completed
+```
+
+### Example: Lo-Fi Detection Decision
+
+![Decision Node](decision.png)
+
+The graph documents how we chose CFCC (Cross-Frequency Coherence) over Temporal Cutoff Variance:
+
+1. **Goal**: Test lo-fi detection on charlie.flac
+2. **Decision**: Choose approach for distinguishing MP3 brick-wall from tape rolloff
+3. **Options**:
+   - Approach A: Temporal Cutoff Variance (rejected - more complex)
+   - Approach B: CFCC (chosen - works with existing FFT structure)
+4. **Action**: Implemented CFCC in commit aa464b6
+5. **Outcome**: Passes 157 tests, detects 25/29 transcodes
+
+![Action Node](action.png)
+
+### Why This Matters
+
+Audio forensics involves many judgment calls. The decision graph:
+- **Documents rationale** so future contributors understand *why* not just *what*
+- **Tracks experiments** that didn't work (equally valuable)
+- **Links code to reasoning** via commit references
+- **Preserves institutional knowledge** that would otherwise be lost
 
 ---
 
