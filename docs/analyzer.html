@@ -3,220 +3,232 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Losselot - Client-Side Audio Analyzer</title>
+    <title>Losselot - Audio Analyzer</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            color: #eee;
-            min-height: 100vh;
-            padding: 20px;
-        }
-        .container { max-width: 900px; margin: 0 auto; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: #fafafa; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 1rem; }
 
-        h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            background: linear-gradient(90deg, #00d9ff, #00ff88);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .subtitle { color: #888; margin-bottom: 30px; }
-        .subtitle a { color: #00d9ff; text-decoration: none; }
+        h1 { font-size: 1.25rem; font-weight: 600; }
+        .nav-link { font-size: 0.75rem; font-weight: 400; color: #1976d2; text-decoration: none; margin-left: 1rem; }
+        .nav-link:hover { text-decoration: underline; }
+        .meta { color: #666; font-size: 0.8rem; margin: 0.25rem 0 0; }
 
+        .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
+        .header-left { flex: 1; min-width: 200px; }
+
+        /* Drop zone */
         .drop-zone {
-            border: 3px dashed #0f3460;
-            border-radius: 20px;
-            padding: 60px 40px;
+            border: 2px dashed #ccc;
+            border-radius: 12px;
+            padding: 3rem 2rem;
             text-align: center;
-            background: rgba(15, 52, 96, 0.3);
-            transition: all 0.3s ease;
+            background: #fff;
+            transition: all 0.2s;
             cursor: pointer;
-            margin-bottom: 30px;
+            margin-bottom: 1rem;
         }
         .drop-zone:hover, .drop-zone.dragover {
-            border-color: #00d9ff;
-            background: rgba(0, 217, 255, 0.1);
+            border-color: #1976d2;
+            background: #e3f2fd;
         }
-        .drop-zone h2 { font-size: 1.5em; margin-bottom: 15px; }
-        .drop-zone p { color: #888; }
+        .drop-zone h2 { font-size: 1.1rem; color: #333; margin-bottom: 0.5rem; }
+        .drop-zone p { color: #666; font-size: 0.85rem; }
         .drop-zone input { display: none; }
 
+        /* Status messages */
         .status {
-            padding: 15px 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            display: none;
-        }
-        .status.loading { display: block; background: rgba(0, 217, 255, 0.2); }
-        .status.error { display: block; background: rgba(239, 68, 68, 0.2); }
-        .status.success { display: block; background: rgba(34, 197, 94, 0.2); }
-
-        .result {
-            background: #16213e;
-            border-radius: 15px;
-            padding: 25px;
-            display: none;
-        }
-        .result.visible { display: block; }
-
-        .verdict {
-            font-size: 3em;
-            font-weight: bold;
-            text-align: center;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-        }
-        .verdict.CLEAN { background: linear-gradient(135deg, #22c55e33, #16a34a33); color: #22c55e; }
-        .verdict.SUSPECT { background: linear-gradient(135deg, #eab30833, #ca8a0433); color: #eab308; }
-        .verdict.TRANSCODE { background: linear-gradient(135deg, #ef444433, #dc262633); color: #ef4444; }
-
-        .score-bar {
-            height: 30px;
-            background: #1a1a2e;
-            border-radius: 15px;
-            overflow: hidden;
-            margin-bottom: 20px;
-        }
-        .score-fill {
-            height: 100%;
-            border-radius: 15px;
-            transition: width 0.5s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-        }
-
-        .metrics {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        .metric {
-            background: #1a1a2e;
-            padding: 15px;
-            border-radius: 10px;
-        }
-        .metric-label { font-size: 0.8em; color: #888; text-transform: uppercase; }
-        .metric-value { font-size: 1.5em; font-weight: bold; color: #00d9ff; }
-
-        .flags {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        .flag {
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 0.85em;
-            background: #0f3460;
-        }
-        .flag.positive { background: #ef444433; color: #ef4444; }
-        .flag.negative { background: #22c55e33; color: #22c55e; }
-
-        .spectrum {
-            background: #1a1a2e;
-            border-radius: 10px;
-            padding: 20px;
-        }
-        .spectrum h3 { margin-bottom: 15px; }
-        #spectrum-canvas {
-            width: 100%;
-            height: 200px;
-            background: #0a0a15;
+            padding: 0.75rem 1rem;
             border-radius: 8px;
+            margin-bottom: 1rem;
+            display: none;
+            font-size: 0.85rem;
         }
+        .status.loading { display: block; background: #e3f2fd; color: #1976d2; }
+        .status.error { display: block; background: #ffebee; color: #c62828; }
+        .status.success { display: block; background: #e8f5e9; color: #2e7d32; }
 
-        .tech-note {
-            margin-top: 30px;
-            padding: 20px;
-            background: rgba(0, 217, 255, 0.1);
-            border-radius: 10px;
-            font-size: 0.9em;
-        }
-        .tech-note h4 { margin-bottom: 10px; color: #00d9ff; }
+        /* Main detail panel */
+        .detail { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 1rem; display: none; }
+        .detail.visible { display: block; }
+        .detail-grid { display: grid; grid-template-columns: 1fr 300px; gap: 1rem; }
+        @media (max-width: 900px) { .detail-grid { grid-template-columns: 1fr; } }
+
+        .detail h2 { font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem; word-break: break-all; }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 1px solid #e0e0e0; }
+        .tab { padding: 0.5rem 1rem; cursor: pointer; font-size: 0.8rem; font-weight: 500; color: #666; border-bottom: 2px solid transparent; transition: all 0.15s; }
+        .tab:hover { color: #333; background: #f5f5f5; }
+        .tab.active { color: #1976d2; border-bottom-color: #1976d2; }
+
+        /* Info grid */
+        .info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.4rem; font-size: 0.8rem; }
+        .info-grid strong { color: #666; }
+
+        /* Flags */
+        .flags { margin: 0.75rem 0; }
+        .flag { display: inline-block; background: #fff8e1; color: #f57c00; border: 1px solid #ffe0b2; padding: 0.15rem 0.5rem; border-radius: 3px; margin: 0.15rem; font-size: 0.7rem; font-family: monospace; }
+        .flag.positive { background: #ffebee; color: #c62828; border-color: #ffcdd2; }
+        .flag.negative { background: #e8f5e9; color: #2e7d32; border-color: #c8e6c9; }
+
+        /* Charts */
+        .chart { margin: 1rem 0; background: #fafafa; border: 1px solid #eee; border-radius: 6px; padding: 0.75rem; }
+        .chart h3 { font-size: 0.8rem; font-weight: 600; color: #555; margin-bottom: 0.5rem; }
+        .chart h3 span { font-weight: 400; color: #888; font-size: 0.7rem; }
+        .chart canvas { display: block; width: 100%; background: #fafafa; border-radius: 4px; }
+
+        /* Verdict summary sidebar */
+        .verdict-summary { background: #fafafa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 1rem; }
+        .verdict-summary h3 { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.75rem; }
+
+        .verdict-badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 4px; font-weight: 700; font-size: 1rem; margin-bottom: 0.75rem; }
+        .verdict-badge.ok { background: #e8f5e9; color: #2e7d32; }
+        .verdict-badge.suspect { background: #fff3e0; color: #f57c00; }
+        .verdict-badge.transcode { background: #ffebee; color: #c62828; }
+
+        .verdict-meter { margin: 0.75rem 0; }
+        .verdict-meter label { font-size: 0.7rem; color: #666; display: block; margin-bottom: 0.25rem; }
+        .meter-bar { height: 10px; background: linear-gradient(to right, #4caf50 0%, #4caf50 35%, #ff9800 35%, #ff9800 65%, #f44336 65%, #f44336 100%); border-radius: 5px; position: relative; }
+        .meter-marker { position: absolute; top: -3px; width: 4px; height: 16px; background: #333; border-radius: 2px; transform: translateX(-50%); }
+
+        .verdict-detail { font-size: 0.75rem; color: #555; line-height: 1.5; }
+        .verdict-detail dt { font-weight: 600; color: #333; margin-top: 0.5rem; }
+        .verdict-detail dd { margin-left: 0; color: #666; }
+
+        /* Raw numbers */
+        .raw-numbers { font-size: 0.75rem; }
+        .raw-section { margin-bottom: 1rem; }
+        .raw-section h4 { font-size: 0.8rem; font-weight: 600; color: #333; margin-bottom: 0.5rem; padding-bottom: 0.25rem; border-bottom: 1px solid #eee; }
+        .raw-table { width: 100%; border-collapse: collapse; }
+        .raw-table td { padding: 0.25rem 0.5rem; border-bottom: 1px solid #f0f0f0; }
+        .raw-table td:first-child { font-weight: 500; color: #555; white-space: nowrap; }
+        .raw-table td:last-child { font-family: monospace; color: #333; }
+        .raw-value-good { color: #2e7d32; }
+        .raw-value-warn { color: #f57c00; }
+        .raw-value-bad { color: #c62828; }
+
+        /* Tech note */
+        .tech-note { margin-top: 1.5rem; padding: 1rem; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; font-size: 0.8rem; }
+        .tech-note h4 { font-size: 0.85rem; margin-bottom: 0.5rem; color: #1976d2; }
+        .tech-note p { color: #666; line-height: 1.5; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Losselot</h1>
-        <p class="subtitle">
-            Client-side audio analysis powered by WebAssembly
-            <br><a href="./">← Back to docs</a>
-        </p>
+        <div class="header-row">
+            <div class="header-left">
+                <h1>Losselot <a href="./" class="nav-link">← Back to docs</a></h1>
+                <p class="meta">Client-side audio analysis powered by WebAssembly</p>
+            </div>
+        </div>
 
         <div class="drop-zone" id="drop-zone">
             <h2>Drop an audio file here</h2>
             <p>or click to browse</p>
-            <p style="margin-top: 15px; font-size: 0.9em;">Supports: MP3, FLAC, WAV, OGG, M4A</p>
+            <p style="margin-top: 0.75rem; font-size: 0.8rem; color: #888;">Supports: MP3, FLAC, WAV, OGG, M4A</p>
             <input type="file" id="file-input" accept="audio/*">
         </div>
 
         <div class="status" id="status"></div>
 
-        <div class="result" id="result">
-            <div class="verdict" id="verdict">ANALYZING...</div>
+        <div class="detail" id="result">
+            <h2 id="file-name">filename.flac</h2>
 
-            <div class="score-bar">
-                <div class="score-fill" id="score-fill"></div>
+            <div class="tabs">
+                <div class="tab active" data-tab="analysis">Analysis</div>
+                <div class="tab" data-tab="raw">Raw Numbers</div>
             </div>
 
-            <div class="metrics">
-                <div class="metric">
-                    <div class="metric-label">Cutoff Frequency</div>
-                    <div class="metric-value" id="cutoff-freq">-</div>
-                </div>
-                <div class="metric">
-                    <div class="metric-label">Cutoff Variance</div>
-                    <div class="metric-value" id="cutoff-var">-</div>
-                </div>
-                <div class="metric">
-                    <div class="metric-label">Rolloff Slope</div>
-                    <div class="metric-value" id="rolloff">-</div>
-                </div>
-                <div class="metric">
-                    <div class="metric-label">CFCC Cliff</div>
-                    <div class="metric-value" id="cfcc">-</div>
+            <div id="tab-analysis" class="tab-content">
+                <div class="detail-grid">
+                    <div class="detail-main">
+                        <div class="info-grid" id="info-grid">
+                            <div><strong>Sample Rate:</strong> <span id="sample-rate">44100 Hz</span></div>
+                            <div><strong>Duration:</strong> <span id="duration">0.0s</span></div>
+                            <div><strong>Channels:</strong> <span id="channels">2</span></div>
+                        </div>
+
+                        <div class="flags" id="flags"></div>
+
+                        <div class="chart">
+                            <h3>Spectrogram <span>(Time vs Frequency — brighter = louder)</span></h3>
+                            <canvas id="spectrogram-canvas" height="200"></canvas>
+                        </div>
+
+                        <div class="chart">
+                            <h3>Frequency Response <span>(Average spectrum across file)</span></h3>
+                            <canvas id="spectrum-canvas" height="150"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="verdict-summary">
+                        <h3>Analysis Summary</h3>
+                        <div class="verdict-badge" id="verdict-badge">OK</div>
+
+                        <div class="verdict-meter">
+                            <label>Confidence Score: <span id="score-label">0%</span></label>
+                            <div class="meter-bar">
+                                <div class="meter-marker" id="score-marker" style="left: 0%"></div>
+                            </div>
+                        </div>
+
+                        <dl class="verdict-detail">
+                            <dt>Verdict</dt>
+                            <dd id="verdict-explanation">Analysis pending...</dd>
+
+                            <dt>Spectral Score</dt>
+                            <dd id="spectral-score">0/100 — frequency content analysis</dd>
+
+                            <dt>Cutoff Frequency</dt>
+                            <dd id="cutoff-freq">— Hz</dd>
+
+                            <dt>Cutoff Variance</dt>
+                            <dd id="cutoff-var">—</dd>
+
+                            <dt>Rolloff Slope</dt>
+                            <dd id="rolloff-slope">— dB/kHz</dd>
+
+                            <dt>CFCC Cliff</dt>
+                            <dd id="cfcc-cliff">Not detected</dd>
+                        </dl>
+                    </div>
                 </div>
             </div>
 
-            <div class="flags" id="flags"></div>
-
-            <div class="spectrum">
-                <h3>Frequency Response</h3>
-                <canvas id="spectrum-canvas"></canvas>
+            <div id="tab-raw" class="tab-content" style="display: none;">
+                <div class="raw-numbers">
+                    <div class="raw-section">
+                        <h4>Core Results</h4>
+                        <table class="raw-table" id="raw-core"></table>
+                    </div>
+                    <div class="raw-section">
+                        <h4>Spectral Metrics</h4>
+                        <table class="raw-table" id="raw-spectral"></table>
+                    </div>
+                    <div class="raw-section">
+                        <h4>Detection Flags</h4>
+                        <div id="raw-flags" style="font-family: monospace; background: #f5f5f5; padding: 0.5rem; border-radius: 4px;"></div>
+                    </div>
+                </div>
             </div>
         </div>
 
         <div class="tech-note">
             <h4>How it works</h4>
-            <p>
-                <strong>100% Rust compiled to WebAssembly</strong> - no JavaScript fallback.
-                This runs the exact same FFT analysis as the CLI tool, just in your browser.
-                Your audio files never leave your device.
-            </p>
-            <p style="margin-top: 10px;">
-                The Web Audio API decodes your file to PCM, then the Rust analyzer performs
-                8192-sample windowed FFT with Hann windowing, detects CFCC codec cliffs at
-                16/17/18/19/20kHz boundaries, calculates cutoff variance (brick-wall detection),
-                and scores based on rolloff slope and ultrasonic energy.
-            </p>
+            <p><strong>100% Rust compiled to WebAssembly</strong> — no JavaScript fallback. This runs the exact same FFT analysis as the CLI tool, just in your browser. Your audio files never leave your device.</p>
+            <p style="margin-top: 0.5rem;">The Web Audio API decodes your file to PCM, then the Rust analyzer performs 8192-sample windowed FFT with Hann windowing, detects CFCC codec cliffs at 16/17/18/19/20kHz boundaries, calculates cutoff variance (brick-wall detection), and scores based on rolloff slope and ultrasonic energy.</p>
         </div>
     </div>
 
     <script type="module">
-        // DOM elements - must be declared before use
+        // DOM elements
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
         const status = document.getElementById('status');
         const result = document.getElementById('result');
 
-        // Load WASM module - NO FALLBACK, this is the real deal
+        // WASM module
         let analyzer = null;
         let wasmReady = false;
 
@@ -227,8 +239,8 @@
                 await wasm.default();
                 analyzer = new wasm.Analyzer();
                 wasmReady = true;
-                showStatus('success', 'WASM analyzer ready - drop a file to analyze');
-                console.log('WASM analyzer loaded - full Rust FFT analysis ready');
+                showStatus('success', 'Ready — drop a file to analyze');
+                console.log('WASM analyzer loaded');
             } catch (e) {
                 showStatus('error', `WASM failed to load: ${e.message}. Make sure the site was deployed via GitHub Actions.`);
                 console.error('WASM load failed:', e);
@@ -238,7 +250,6 @@
         initWasm();
 
         // File handling
-
         dropZone.addEventListener('click', () => fileInput.click());
         dropZone.addEventListener('dragover', (e) => {
             e.preventDefault();
@@ -260,23 +271,32 @@
             }
         });
 
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('tab-analysis').style.display = tab.dataset.tab === 'analysis' ? 'block' : 'none';
+                document.getElementById('tab-raw').style.display = tab.dataset.tab === 'raw' ? 'block' : 'none';
+            });
+        });
+
         async function analyzeFile(file) {
-            // WASM REQUIRED - no fallback
             if (!wasmReady || !analyzer) {
-                showStatus('error', 'WASM analyzer not loaded. Cannot analyze without it.');
+                showStatus('error', 'WASM analyzer not loaded.');
                 return;
             }
 
-            showStatus('loading', `Analyzing ${file.name} with Rust FFT...`);
+            showStatus('loading', `Analyzing ${file.name}...`);
             result.classList.remove('visible');
 
             try {
-                // Decode audio using Web Audio API
+                // Decode audio
                 const audioContext = new AudioContext({ sampleRate: 44100 });
                 const arrayBuffer = await file.arrayBuffer();
                 const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
-                // Get mono samples (mix down if stereo)
+                // Get mono samples
                 let samples;
                 if (audioBuffer.numberOfChannels === 1) {
                     samples = audioBuffer.getChannelData(0);
@@ -289,11 +309,12 @@
                     }
                 }
 
-                // Analyze with WASM - the REAL Rust FFT analyzer
-                const analysisResult = analyzer.analyze(samples);
+                // Analyze with WASM
+                const r = analyzer.analyze(samples);
 
-                displayResult(analysisResult);
-                showStatus('success', `Analysis complete: ${analysisResult.verdict}`);
+                // Display results
+                displayResult(r, file.name, audioBuffer);
+                showStatus('success', `Analysis complete: ${r.verdict}`);
 
             } catch (e) {
                 showStatus('error', `Error: ${e.message}`);
@@ -301,79 +322,262 @@
             }
         }
 
-        function displayResult(r) {
-            document.getElementById('verdict').textContent = r.verdict;
-            document.getElementById('verdict').className = 'verdict ' + r.verdict;
+        function displayResult(r, fileName, audioBuffer) {
+            // File info
+            document.getElementById('file-name').textContent = fileName;
+            document.getElementById('sample-rate').textContent = audioBuffer.sampleRate + ' Hz';
+            document.getElementById('duration').textContent = audioBuffer.duration.toFixed(1) + 's';
+            document.getElementById('channels').textContent = audioBuffer.numberOfChannels;
 
-            const scoreFill = document.getElementById('score-fill');
-            scoreFill.style.width = r.score + '%';
-            scoreFill.textContent = r.score + '%';
-            scoreFill.style.background = r.score >= 65 ? '#ef4444' : r.score >= 35 ? '#eab308' : '#22c55e';
+            // Verdict
+            const v = r.verdict.toLowerCase();
+            const badge = document.getElementById('verdict-badge');
+            badge.textContent = r.verdict;
+            badge.className = 'verdict-badge ' + v;
 
+            // Score
+            document.getElementById('score-label').textContent = r.score + '%';
+            document.getElementById('score-marker').style.left = r.score + '%';
+
+            // Explanation
+            const explanations = {
+                ok: 'This file appears to be a legitimate encode with expected frequency content.',
+                suspect: 'This file shows some indicators of possible lossy origin, but evidence is not conclusive.',
+                transcode: 'This file shows strong evidence of being transcoded from a lower quality source.'
+            };
+            document.getElementById('verdict-explanation').textContent = explanations[v] || '';
+
+            // Metrics
+            document.getElementById('spectral-score').textContent = `${r.score}/100 — frequency content analysis`;
             document.getElementById('cutoff-freq').textContent = Math.round(r.avg_cutoff_freq) + ' Hz';
             document.getElementById('cutoff-var').textContent = Math.round(r.cutoff_variance);
-            document.getElementById('rolloff').textContent = r.rolloff_slope.toFixed(2) + ' dB/kHz';
-            document.getElementById('cfcc').textContent = r.cfcc_cliff_detected ? 'DETECTED' : 'None';
+            document.getElementById('rolloff-slope').textContent = r.rolloff_slope.toFixed(2) + ' dB/kHz';
+            document.getElementById('cfcc-cliff').textContent = r.cfcc_cliff_detected ? 'DETECTED — codec signature found' : 'Not detected';
 
+            // Flags
             const flagsEl = document.getElementById('flags');
             flagsEl.innerHTML = r.flags.map(f => {
+                const isPositive = f.includes('cutoff') || f.includes('dead') || f.includes('steep') || f.includes('weak');
                 const isNegative = f.includes('safe') || f.includes('natural');
-                return `<span class="flag ${isNegative ? 'negative' : 'positive'}">${f}</span>`;
+                return `<span class="flag ${isPositive ? 'positive' : ''} ${isNegative ? 'negative' : ''}">${f}</span>`;
             }).join('');
 
-            // Draw frequency response if available
+            // Spectrogram
+            if (r.spectrogram_data && r.spectrogram_data.length > 0) {
+                drawSpectrogram(r.spectrogram_data, r.spectrogram_times, r.spectrogram_freqs);
+            }
+
+            // Frequency response
             if (r.frequency_response && r.frequency_response.length > 0) {
                 drawSpectrum(r.frequency_response);
             }
 
+            // Raw numbers
+            document.getElementById('raw-core').innerHTML = `
+                <tr><td>Verdict</td><td class="raw-value-${v === 'ok' ? 'good' : v === 'suspect' ? 'warn' : 'bad'}">${r.verdict}</td></tr>
+                <tr><td>Score</td><td>${r.score}/100</td></tr>
+            `;
+            document.getElementById('raw-spectral').innerHTML = `
+                <tr><td>Avg Cutoff Frequency</td><td>${r.avg_cutoff_freq.toFixed(2)} Hz</td></tr>
+                <tr><td>Cutoff Variance</td><td>${r.cutoff_variance.toFixed(2)}</td></tr>
+                <tr><td>Rolloff Slope</td><td>${r.rolloff_slope.toFixed(4)} dB/kHz</td></tr>
+                <tr><td>CFCC Cliff Detected</td><td class="${r.cfcc_cliff_detected ? 'raw-value-bad' : 'raw-value-good'}">${r.cfcc_cliff_detected}</td></tr>
+            `;
+            document.getElementById('raw-flags').textContent = r.flags.length > 0 ? r.flags.join('\n') : '(none)';
+
             result.classList.add('visible');
+        }
+
+        function drawSpectrogram(data, times, freqs) {
+            const canvas = document.getElementById('spectrogram-canvas');
+            const ctx = canvas.getContext('2d');
+
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = 200 * dpr;
+            ctx.scale(dpr, dpr);
+
+            const w = rect.width;
+            const h = 200;
+            const pad = { left: 50, right: 50, top: 10, bottom: 25 };
+            const chartW = w - pad.left - pad.right;
+            const chartH = h - pad.top - pad.bottom;
+
+            // Background
+            ctx.fillStyle = '#fafafa';
+            ctx.fillRect(0, 0, w, h);
+
+            // If we have proper 2D data
+            if (times && freqs && data.length === times.length * freqs.length) {
+                const tw = times.length;
+                const th = freqs.length;
+
+                // Find range
+                let min = 0, max = -100;
+                for (const m of data) { if (m > max) max = m; if (m < min && m > -100) min = m; }
+                const range = max - min || 1;
+
+                // Create image
+                const img = ctx.createImageData(tw, th);
+                for (let t = 0; t < tw; t++) {
+                    for (let f = 0; f < th; f++) {
+                        const val = Math.max(0, Math.min(1, (data[t * th + f] - min) / range));
+                        const idx = ((th - 1 - f) * tw + t) * 4;
+                        // Warm colormap
+                        if (val < 0.25) {
+                            img.data[idx] = Math.floor(val * 4 * 180);
+                            img.data[idx+1] = 0;
+                            img.data[idx+2] = 0;
+                        } else if (val < 0.5) {
+                            img.data[idx] = 180 + Math.floor((val - 0.25) * 4 * 75);
+                            img.data[idx+1] = Math.floor((val - 0.25) * 4 * 100);
+                            img.data[idx+2] = 0;
+                        } else if (val < 0.75) {
+                            img.data[idx] = 255;
+                            img.data[idx+1] = 100 + Math.floor((val - 0.5) * 4 * 155);
+                            img.data[idx+2] = Math.floor((val - 0.5) * 4 * 100);
+                        } else {
+                            img.data[idx] = 255;
+                            img.data[idx+1] = 255;
+                            img.data[idx+2] = 100 + Math.floor((val - 0.75) * 4 * 155);
+                        }
+                        img.data[idx+3] = 255;
+                    }
+                }
+
+                // Draw to temp canvas and scale
+                const tmp = document.createElement('canvas');
+                tmp.width = tw; tmp.height = th;
+                tmp.getContext('2d').putImageData(img, 0, 0);
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(tmp, pad.left, pad.top, chartW, chartH);
+
+                // Y-axis labels
+                ctx.fillStyle = '#666';
+                ctx.font = '10px system-ui';
+                ctx.textAlign = 'right';
+                const maxFreq = freqs[freqs.length - 1] || 22050;
+                [0, 5000, 10000, 15000, 20000].forEach(f => {
+                    if (f <= maxFreq) {
+                        const y = pad.top + chartH - (f / maxFreq) * chartH;
+                        ctx.fillText(`${f/1000}k`, pad.left - 5, y + 3);
+                    }
+                });
+
+                // X-axis labels
+                ctx.textAlign = 'center';
+                const maxTime = times[times.length - 1] || 10;
+                for (let t = 0; t <= maxTime; t += Math.ceil(maxTime / 5)) {
+                    const x = pad.left + (t / maxTime) * chartW;
+                    ctx.fillText(`${t}s`, x, h - 5);
+                }
+
+                // Color legend
+                const legW = 12, legH = chartH;
+                const legX = w - pad.right + 10;
+                for (let i = 0; i < legH; i++) {
+                    const val = 1 - i / legH;
+                    ctx.fillStyle = val < 0.25 ? `rgb(${Math.floor(val*4*180)},0,0)` :
+                                    val < 0.5 ? `rgb(${180+Math.floor((val-0.25)*4*75)},${Math.floor((val-0.25)*4*100)},0)` :
+                                    val < 0.75 ? `rgb(255,${100+Math.floor((val-0.5)*4*155)},${Math.floor((val-0.5)*4*100)})` :
+                                    `rgb(255,255,${100+Math.floor((val-0.75)*4*155)})`;
+                    ctx.fillRect(legX, pad.top + i, legW, 1);
+                }
+                ctx.fillStyle = '#666';
+                ctx.textAlign = 'left';
+                ctx.font = '9px system-ui';
+                ctx.fillText('0dB', legX + legW + 3, pad.top + 8);
+                ctx.fillText('-96', legX + legW + 3, pad.top + legH);
+            } else {
+                // Fallback: simple 1D spectrum as bars
+                ctx.fillStyle = '#e0e0e0';
+                ctx.fillRect(pad.left, pad.top, chartW, chartH);
+                ctx.fillStyle = '#666';
+                ctx.font = '12px system-ui';
+                ctx.textAlign = 'center';
+                ctx.fillText('Spectrogram data not available', w/2, h/2);
+            }
         }
 
         function drawSpectrum(data) {
             const canvas = document.getElementById('spectrum-canvas');
             const ctx = canvas.getContext('2d');
-            canvas.width = canvas.offsetWidth * 2;
-            canvas.height = canvas.offsetHeight * 2;
-            ctx.scale(2, 2);
 
-            const w = canvas.offsetWidth;
-            const h = canvas.offsetHeight;
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = 150 * dpr;
+            ctx.scale(dpr, dpr);
 
-            ctx.fillStyle = '#0a0a15';
+            const w = rect.width;
+            const h = 150;
+            const pad = { left: 50, right: 20, top: 15, bottom: 25 };
+            const chartW = w - pad.left - pad.right;
+            const chartH = h - pad.top - pad.bottom;
+
+            // Background
+            ctx.fillStyle = '#fafafa';
             ctx.fillRect(0, 0, w, h);
 
             if (data.length === 0) return;
 
-            // Draw frequency response
-            ctx.beginPath();
-            ctx.strokeStyle = '#00d9ff';
-            ctx.lineWidth = 2;
-
-            const step = w / data.length;
+            // Find range
             const minDb = -100;
             const maxDb = 0;
 
-            for (let i = 0; i < data.length; i++) {
-                const x = i * step;
-                const db = Math.max(minDb, Math.min(maxDb, data[i]));
-                const y = h - ((db - minDb) / (maxDb - minDb)) * h;
+            // Draw frequency response as filled area
+            ctx.fillStyle = 'rgba(25, 118, 210, 0.2)';
+            ctx.strokeStyle = '#1976d2';
+            ctx.lineWidth = 2;
 
-                if (i === 0) {
-                    ctx.moveTo(x, y);
-                } else {
-                    ctx.lineTo(x, y);
-                }
+            ctx.beginPath();
+            ctx.moveTo(pad.left, pad.top + chartH);
+
+            for (let i = 0; i < data.length; i++) {
+                const x = pad.left + (i / data.length) * chartW;
+                const db = Math.max(minDb, Math.min(maxDb, data[i]));
+                const y = pad.top + chartH - ((db - minDb) / (maxDb - minDb)) * chartH;
+                ctx.lineTo(x, y);
+            }
+
+            ctx.lineTo(pad.left + chartW, pad.top + chartH);
+            ctx.closePath();
+            ctx.fill();
+
+            // Line on top
+            ctx.beginPath();
+            for (let i = 0; i < data.length; i++) {
+                const x = pad.left + (i / data.length) * chartW;
+                const db = Math.max(minDb, Math.min(maxDb, data[i]));
+                const y = pad.top + chartH - ((db - minDb) / (maxDb - minDb)) * chartH;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
             }
             ctx.stroke();
 
-            // Draw frequency labels
+            // Y-axis
             ctx.fillStyle = '#666';
-            ctx.font = '10px sans-serif';
-            const freqLabels = ['5k', '10k', '15k', '20k'];
-            freqLabels.forEach((label, i) => {
-                const x = ((i + 1) / 5) * w;
+            ctx.font = '10px system-ui';
+            ctx.textAlign = 'right';
+            [-80, -60, -40, -20, 0].forEach(db => {
+                const y = pad.top + chartH - ((db - minDb) / (maxDb - minDb)) * chartH;
+                ctx.fillText(`${db}`, pad.left - 5, y + 3);
+                ctx.strokeStyle = '#e0e0e0';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(pad.left, y);
+                ctx.lineTo(pad.left + chartW, y);
+                ctx.stroke();
+            });
+
+            // X-axis (frequency)
+            ctx.textAlign = 'center';
+            ['5k', '10k', '15k', '20k'].forEach((label, i) => {
+                const x = pad.left + ((i + 1) / 5) * chartW;
                 ctx.fillText(label, x, h - 5);
             });
+            ctx.fillText('Hz', pad.left + chartW + 10, h - 5);
         }
 
         function showStatus(type, message) {

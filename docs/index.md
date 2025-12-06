@@ -5,42 +5,130 @@ title: Home
 
 # Losselot
 
-Detects fake lossless audio. Point it at a FLAC/WAV and it tells you if it's actually from a lossy source.
+Detects fake lossless audio files - FLACs and WAVs that were actually made from MP3s.
 
-![Losselot in action](demo.gif)
+---
 
-## Install
+## Try It Now
+
+**[Browser Analyzer](analyzer.html)** - Upload files, analyze in your browser, no server needed
+
+**[Interactive Demo](demo/)** - See real decision graph data from development
+
+---
+
+## What It Does
+
+When someone converts an MP3 to FLAC, the high frequencies that MP3 removed don't come back. Losselot detects this:
+
+1. **Spectral Analysis** - FFT finds where frequencies cut off
+2. **Binary Analysis** - Checks for encoder signatures (LAME, FFmpeg, etc.)
+3. **Lo-fi Detection** - Distinguishes MP3 cutoff from natural tape rolloff
+
+### Verdicts
+
+| Score | Verdict | Meaning |
+|-------|---------|---------|
+| 0-34 | OK | Clean file |
+| 35-64 | SUSPECT | Possibly transcoded |
+| 65-100 | TRANSCODE | Definitely from lossy source |
+
+---
+
+## Install & Run
 
 ```bash
 git clone https://github.com/notactuallytreyanastasio/losselot.git
 cd losselot
 cargo build --release
-```
 
-## Use
-
-```bash
 # Analyze files
 ./target/release/losselot ~/Music/
 
-# Web UI
+# Web UI with spectrograms
 ./target/release/losselot serve ~/Music/ --port 3000
 ```
 
-## How it works
+---
 
-MP3s cut off high frequencies. Converting an MP3 to FLAC doesn't bring them back. Losselot runs FFT analysis to find where the cutoff is.
+## Key Detection Flags
 
-It also checks for lo-fi/tape recordings that naturally roll off high frequencies (not transcodes).
+**Spectral indicators:**
+- `severe_hf_damage` - Major high-frequency loss
+- `hf_cutoff_detected` - Sharp frequency cutoff found
+- `dead_ultrasonic_band` - No content above 20kHz
+- `cfcc_cliff` - Cross-frequency coherence cliff (MP3 signature)
 
-## Demo
+**Re-encoding indicators:**
+- `multi_encoder_sigs` - Multiple encoder signatures found
+- `encoding_chain(LAME → FFmpeg)` - Detected processing chain
+- `lowpass_bitrate_mismatch` - Lowpass doesn't match claimed quality
 
-**[Try the interactive demo →](demo/)**
+---
 
-Real decision graph data from development included.
+## Also in This Repo
 
-## Also in this repo
+### [Decision Graph](decision-graph)
 
-- [Decision Graph](decision-graph) - DAG tracking why decisions were made
-- [Claude Tooling](claude-tooling) - Slash commands and context recovery
-- [Development Story](story) - How this was built
+A queryable record of every decision made during development. Not documentation - actual decision nodes stored in SQLite.
+
+```bash
+./losselot db nodes    # See all decisions
+./losselot db edges    # See relationships
+./losselot db graph    # Export as JSON
+```
+
+### [Claude Tooling](claude-tooling)
+
+Slash commands and context recovery for AI-assisted development. The decision graph persists across session boundaries.
+
+### [Development Story](story)
+
+How this tool evolved from a simple FFT check to multi-method analysis with lo-fi detection.
+
+---
+
+## Output Formats
+
+```bash
+# Terminal output (default)
+./losselot ~/Music/
+
+# JSON for scripting
+./losselot ~/Music/ --format json
+
+# HTML report
+./losselot ~/Music/ --format html > report.html
+
+# CSV for spreadsheets
+./losselot ~/Music/ --format csv > report.csv
+```
+
+---
+
+## Architecture
+
+```
+src/
+├── main.rs         # CLI + parallel execution
+├── serve.rs        # Web UI server
+├── analyzer/
+│   ├── mod.rs      # Score combination
+│   ├── spectral.rs # FFT analysis
+│   └── binary.rs   # Encoder detection
+└── report/         # Output formats
+```
+
+Key dependencies: `symphonia` (audio decode), `rustfft` (FFT), `rayon` (parallel), `diesel` (SQLite)
+
+---
+
+## Exit Codes
+
+- `0` - All files clean
+- `1` - At least one suspect
+- `2` - At least one definite transcode
+
+---
+
+[GitHub Repository](https://github.com/notactuallytreyanastasio/losselot)
