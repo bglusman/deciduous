@@ -32,6 +32,33 @@ The graph is stored in a SQLite database (`losselot.db`) that persists across se
 
 ---
 
+## Confidence Weights
+
+Every node can have a **confidence score** (0-100) - how sure we were when making that decision:
+
+| Score | Meaning |
+|:-----:|---------|
+| 80-100 | High confidence - well understood, proven approach |
+| 50-79 | Medium - reasonable choice, some uncertainty |
+| 0-49 | Low - experimental, might revisit |
+
+Confidence is stored in `metadata_json` and displayed as colored badges:
+- **Green** (70+) - High confidence
+- **Yellow** (40-69) - Medium confidence
+- **Red** (<40) - Low confidence / experimental
+
+This becomes valuable for hindsight analysis - comparing what we *thought* vs what *happened*.
+
+```bash
+# Add node with confidence
+./losselot db add-node -t decision "Use CFCC over temporal variance" -c 85
+
+# Or via Makefile
+make decision T="Use CFCC over temporal variance" C=85
+```
+
+---
+
 ## Edge Types
 
 Edges show relationships between nodes:
@@ -134,10 +161,10 @@ Six months from now, when someone asks "why didn't you use temporal variance?", 
 Or use Makefile shortcuts:
 
 ```bash
-make obs T="Your observation"
-make decision T="Your decision"
-make action T="What you did"
-make outcome T="Result"
+make obs T="Your observation" C=80           # with confidence
+make decision T="Your decision" C=75
+make action T="What you did" C=90
+make outcome T="Result" C=95
 make link FROM=1 TO=2 REASON="why"
 ```
 
@@ -147,11 +174,11 @@ make link FROM=1 TO=2 REASON="why"
 
 The graph currently contains:
 
-- **56+ nodes** across 6 types
-- **47+ edges** showing relationships
-- **4 major goal chains**: lo-fi detection, GitHub Pages site, WASM analyzer, docs fixes
+- **67+ nodes** across 6 types
+- **50+ edges** showing relationships
+- **5+ major chains**: lo-fi detection, GitHub Pages site, WASM analyzer, confidence weights, TypeScript migration
 
-Every node has timestamps, optional descriptions, and status tracking.
+Every node has timestamps, optional descriptions, confidence scores, and status tracking.
 
 ---
 
