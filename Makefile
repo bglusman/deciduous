@@ -1,4 +1,4 @@
-.PHONY: build release debug test test-verbose clean install uninstall serve analyze gen-test-files fmt lint check help db-nodes db-edges db-graph db-commands db-backup db-view goal decision option action outcome obs link status
+.PHONY: build release debug test test-verbose clean install uninstall serve analyze gen-test-files fmt lint check help db-nodes db-edges db-graph db-commands db-backup db-view goal decision option action outcome obs link status sync-graph deploy
 
 # Default target
 all: release
@@ -242,3 +242,21 @@ help:
 	@echo "  make link FROM=1 TO=2           Link nodes"
 	@echo "  make link FROM=1 TO=2 TYPE=chosen REASON='why'"
 	@echo "  make status ID=1 S=completed    Update node status"
+	@echo ""
+	@echo "Deploy:"
+	@echo "  make sync-graph   Export decision graph to docs/demo/graph-data.json"
+	@echo "  make deploy       Sync graph and push to main (triggers Pages build)"
+
+# ============ Deploy ============
+
+# Export decision graph to docs for GitHub Pages
+sync-graph: release
+	@echo "Exporting decision graph to docs/demo/graph-data.json..."
+	$(BINARY) db graph > docs/demo/graph-data.json
+	@echo "Graph exported: $$($(BINARY) db nodes | wc -l | tr -d ' ') nodes"
+
+# Sync graph and push - triggers GitHub Pages deployment
+deploy: sync-graph
+	@echo "Decision graph synced. Ready to commit and push."
+	@echo "Files changed:"
+	@git status --short docs/demo/graph-data.json

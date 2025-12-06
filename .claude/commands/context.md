@@ -87,6 +87,24 @@ Suggested Next Steps:
 3. Split large files if needed
 ```
 
+## The Memory Loop
+
+```
+SESSION START → Query graph → See past decisions
+     ↓
+DO WORK → Log observations, decisions, actions
+     ↓
+BEFORE PUSH → make sync-graph → Export to JSON
+     ↓
+PUSH → GitHub Pages updates with live graph
+     ↓
+SESSION END → Graph persists
+     ↓
+(repeat)
+```
+
+**Live graph**: https://notactuallytreyanastasio.github.io/losselot/demo/
+
 ## Why This Matters
 
 Context loss during compaction can lead to:
@@ -95,3 +113,14 @@ Context loss during compaction can lead to:
 - Losing track of the reasoning behind implementations
 
 The decision graph is specifically designed to survive context loss. Query it early, query it often.
+
+## Quick Logging During Session
+
+```bash
+make obs T="Something I noticed"
+make decision T="Choice I'm making"
+make action T="What I implemented"
+make link FROM=X TO=Y REASON="why"
+```
+
+Then before pushing: `make sync-graph`

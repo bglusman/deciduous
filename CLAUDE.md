@@ -2,35 +2,60 @@
 
 Losselot detects fake "lossless" audio files—files claiming to be lossless (FLAC, WAV, AIFF) but actually created from lossy sources (MP3, AAC). It uses dual analysis: binary metadata inspection and FFT-based spectral analysis.
 
-## Context Recovery (CRITICAL)
+## Decision Graph Memory (CRITICAL - READ FIRST)
 
-**On every session start or after context compaction, IMMEDIATELY run:**
+**The decision graph IS your memory. It persists across sessions and context compactions.**
 
+### On Session Start - ALWAYS DO THIS:
 ```bash
-# 1. Query decision graph for current state
-./target/release/losselot db nodes
-./target/release/losselot db commands
-
-# 2. Check git state
-git status && git log --oneline -5
-
-# 3. Check session log
-tail -20 git.log
+./target/release/losselot db nodes    # See all decisions/observations
+./target/release/losselot db edges    # See how they connect
+./target/release/losselot db commands # Recent activity
 ```
 
-Or use the slash command: `/context`
+Or use: `/context`
 
-**Why this matters:**
-- The decision graph is your persistent memory across sessions
-- It contains algorithm decisions, implementation rationale, and open questions
-- Context loss leads to repeated work and lost reasoning
-- Query the graph BEFORE starting any work
+### During Work - LOG EVERYTHING:
+```bash
+# Log observations as you discover things
+./target/release/losselot db add-node -t observation "What you found"
 
-**What to look for:**
-- Pending decisions that need resolution
-- Recent actions and their outcomes
-- Observations that inform current work
-- Status of ongoing investigations
+# Log decisions when choosing between options
+./target/release/losselot db add-node -t decision "The choice you're making"
+
+# Log actions when you implement something
+./target/release/losselot db add-node -t action "What you did"
+
+# Log outcomes when you see results
+./target/release/losselot db add-node -t outcome "What happened"
+
+# Connect related nodes
+./target/release/losselot db add-edge FROM_ID TO_ID -r "Why they connect"
+```
+
+Or use Makefile shortcuts:
+```bash
+make obs T="Your observation"
+make decision T="Your decision"
+make action T="What you did"
+make outcome T="Result"
+make link FROM=1 TO=2 REASON="why"
+```
+
+### Before Deploying - SYNC THE GRAPH:
+```bash
+make sync-graph  # Exports to docs/demo/graph-data.json
+# Then commit and push - GitHub Pages shows the live graph
+```
+
+**The live decision graph is at: https://notactuallytreyanastasio.github.io/losselot/demo/**
+
+### Why This Matters:
+- You WILL lose context. The graph survives.
+- Every decision you make should be queryable later
+- The graph shows WHY things were done, not just what
+- Future sessions can trace back through your reasoning
+- The public site displays ALL your logic transparently
 
 ## Quick Reference
 
