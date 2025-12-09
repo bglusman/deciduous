@@ -1,0 +1,520 @@
+/**
+ * DAG View
+ *
+ * Port of docs/demo/visual-graph.html - Dagre hierarchical layout.
+ * Uses D3.js + Dagre for organized DAG visualization.
+ */
+
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
+import * as d3 from 'd3';
+import dagre from 'dagre';
+import type { DecisionNode, DecisionEdge, GraphData, Chain } from '../types/graph';
+import { getConfidence, getCommit, truncate } from '../types/graph';
+import { getDescendants } from '../utils/graphProcessing';
+import { TypeBadge, ConfidenceBadge, CommitBadge, EdgeBadge } from '../components/NodeBadge';
+import { NODE_COLORS, getNodeColor, getEdgeColor } from '../utils/colors';
+
+interface DagViewProps {
+  graphData: GraphData;
+  chains: Chain[];
+}
+
+// Dagre node data type
+interface DagreNodeData {
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+  node: DecisionNode;
+}
+
+// Dagre edge data type
+interface DagreEdgeData {
+  points: { x: number; y: number }[];
+  edge: DecisionEdge;
+}
+
+export const DagView: React.FC<DagViewProps> = ({ graphData, chains }) => {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [selectedNode, setSelectedNode] = useState<DecisionNode | null>(null);
+  const [focusChainIndex, setFocusChainIndex] = useState<number | null>(null);
+  const [zoom, setZoom] = useState(1);
+
+  // Get the focused chain's nodes
+  const focusedNodeIds = useMemo(() => {
+    if (focusChainIndex === null) return null;
+    const chain = chains[focusChainIndex];
+    if (!chain) return null;
+    return getDescendants(chain.root.id, graphData);
+  }, [focusChainIndex, chains, graphData]);
+
+  const handleSelectNode = useCallback((node: DecisionNode) => {
+    setSelectedNode(node);
+  }, []);
+
+  const handleSelectNodeById = useCallback((id: number) => {
+    const node = graphData.nodes.find(n => n.id === id);
+    if (node) setSelectedNode(node);
+  }, [graphData.nodes]);
+
+  // Build and render DAG
+  useEffect(() => {
+    if (!svgRef.current || !containerRef.current) return;
+
+    const svg = d3.select(svgRef.current);
+    const container = containerRef.current;
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    svg.selectAll('*').remove();
+
+    // Filter nodes if focusing on a chain
+    const visibleNodes = focusedNodeIds
+      ? graphData.nodes.filter(n => focusedNodeIds.has(n.id))
+      : graphData.nodes;
+
+    const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
+
+    const visibleEdges = graphData.edges.filter(
+      e => visibleNodeIds.has(e.from_node_id) && visibleNodeIds.has(e.to_node_id)
+    );
+
+    if (visibleNodes.length === 0) return;
+
+    // Create Dagre graph
+    const g = new dagre.graphlib.Graph();
+    g.setGraph({
+      rankdir: 'TB',
+      nodesep: 80,
+      ranksep: 100,
+      marginx: 50,
+      marginy: 50,
+    });
+    g.setDefaultEdgeLabel(() => ({}));
+
+    // Add nodes
+    visibleNodes.forEach(node => {
+      g.setNode(String(node.id), {
+        width: 150,
+        height: 60,
+        node,
+      });
+    });
+
+    // Add edges
+    visibleEdges.forEach(edge => {
+      g.setEdge(String(edge.from_node_id), String(edge.to_node_id), { edge });
+    });
+
+    // Run layout
+    dagre.layout(g);
+
+    // Get graph dimensions
+    const graphWidth = g.graph().width || width;
+    const graphHeight = g.graph().height || height;
+
+    // Create main group first (before zoom behavior references it)
+    const mainGroup = svg.append('g');
+
+    // Create container group with zoom
+    const zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.1, 3])
+      .on('zoom', (event) => {
+        mainGroup.attr('transform', event.transform);
+        setZoom(event.transform.k);
+      });
+
+    svg.call(zoomBehavior);
+
+    // Center the graph initially
+    const initialScale = Math.min(
+      (width - 100) / graphWidth,
+      (height - 100) / graphHeight,
+      1
+    );
+    const tx = (width - graphWidth * initialScale) / 2;
+    const ty = (height - graphHeight * initialScale) / 2;
+
+    svg.call(
+      zoomBehavior.transform,
+      d3.zoomIdentity.translate(tx, ty).scale(initialScale)
+    );
+
+    // Draw edges
+    const edges = mainGroup.append('g')
+      .selectAll('.edge')
+      .data(g.edges())
+      .join('g')
+      .attr('class', 'edge');
+
+    edges.each(function (e) {
+      const edge = g.edge(e) as DagreEdgeData;
+      const edgeData = edge.edge;
+
+      const line = d3.line<{ x: number; y: number }>()
+        .x(d => d.x)
+        .y(d => d.y)
+        .curve(d3.curveBasis);
+
+      d3.select(this)
+        .append('path')
+        .attr('d', line(edge.points))
+        .attr('fill', 'none')
+        .attr('stroke', getEdgeColor(edgeData.edge_type))
+        .attr('stroke-width', 2)
+        .attr('stroke-opacity', 0.6)
+        .attr('stroke-dasharray', edgeData.edge_type === 'rejected' ? '5,5' : null)
+        .attr('marker-end', 'url(#arrowhead)');
+    });
+
+    // Arrow marker
+    svg.append('defs').append('marker')
+      .attr('id', 'arrowhead')
+      .attr('viewBox', '-5 -5 10 10')
+      .attr('refX', 8)
+      .attr('refY', 0)
+      .attr('markerWidth', 6)
+      .attr('markerHeight', 6)
+      .attr('orient', 'auto')
+      .append('path')
+      .attr('d', 'M-5,-5L5,0L-5,5Z')
+      .attr('fill', '#666');
+
+    // Draw nodes
+    const nodes = mainGroup.append('g')
+      .selectAll('.node')
+      .data(g.nodes())
+      .join('g')
+      .attr('class', 'node')
+      .attr('transform', d => {
+        const node = g.node(d) as DagreNodeData;
+        return `translate(${node.x - node.width / 2},${node.y - node.height / 2})`;
+      })
+      .style('cursor', 'pointer')
+      .on('click', (_event, d) => {
+        const nodeData = (g.node(d) as DagreNodeData).node;
+        handleSelectNode(nodeData);
+      });
+
+    // Node rectangles
+    nodes.append('rect')
+      .attr('width', d => (g.node(d) as DagreNodeData).width)
+      .attr('height', d => (g.node(d) as DagreNodeData).height)
+      .attr('rx', 8)
+      .attr('fill', d => {
+        const nodeData = (g.node(d) as DagreNodeData).node;
+        return getNodeColor(nodeData.node_type);
+      })
+      .attr('fill-opacity', 0.2)
+      .attr('stroke', d => {
+        const nodeData = (g.node(d) as DagreNodeData).node;
+        return getNodeColor(nodeData.node_type);
+      })
+      .attr('stroke-width', 2);
+
+    // Node ID
+    nodes.append('text')
+      .attr('x', 10)
+      .attr('y', 18)
+      .attr('fill', '#666')
+      .attr('font-size', '10px')
+      .text(d => `#${d}`);
+
+    // Node title
+    nodes.append('text')
+      .attr('x', d => (g.node(d) as DagreNodeData).width / 2)
+      .attr('y', 38)
+      .attr('text-anchor', 'middle')
+      .attr('fill', '#eee')
+      .attr('font-size', '12px')
+      .text(d => {
+        const nodeData = (g.node(d) as DagreNodeData).node;
+        return truncate(nodeData.title, 20);
+      });
+
+    // Cleanup
+    return () => {
+      svg.on('.zoom', null);
+    };
+  }, [graphData, focusedNodeIds, handleSelectNode]);
+
+  // Goals for chain selector
+  const goals = chains.filter(c => c.root.node_type === 'goal');
+
+  return (
+    <div style={styles.container}>
+      {/* Controls */}
+      <div style={styles.controls}>
+        <h2 style={styles.title}>DAG View</h2>
+
+        <div style={styles.section}>
+          <label style={styles.label}>Focus Chain</label>
+          <select
+            value={focusChainIndex ?? ''}
+            onChange={e => setFocusChainIndex(e.target.value ? Number(e.target.value) : null)}
+            style={styles.select}
+          >
+            <option value="">All Nodes</option>
+            {goals.map((chain, i) => (
+              <option key={i} value={chains.indexOf(chain)}>
+                {truncate(chain.root.title, 30)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div style={styles.legend}>
+          <div style={styles.legendTitle}>Node Types</div>
+          {Object.entries(NODE_COLORS).map(([type, color]) => (
+            <div key={type} style={styles.legendItem}>
+              <div style={{ ...styles.legendDot, backgroundColor: color }} />
+              <span>{type}</span>
+            </div>
+          ))}
+        </div>
+
+        <div style={styles.zoomInfo}>
+          Zoom: {Math.round(zoom * 100)}%
+        </div>
+      </div>
+
+      {/* SVG Container */}
+      <div ref={containerRef} style={styles.svgContainer}>
+        <svg ref={svgRef} style={styles.svg} />
+      </div>
+
+      {/* Detail Panel */}
+      {selectedNode && (
+        <div style={styles.detailPanel}>
+          <button onClick={() => setSelectedNode(null)} style={styles.closeBtn}>×</button>
+
+          <div style={styles.detailHeader}>
+            <TypeBadge type={selectedNode.node_type} />
+            <ConfidenceBadge confidence={getConfidence(selectedNode)} />
+            <CommitBadge commit={getCommit(selectedNode)} />
+          </div>
+
+          <h3 style={styles.detailTitle}>{selectedNode.title}</h3>
+          <p style={styles.detailMeta}>
+            Node #{selectedNode.id} · {new Date(selectedNode.created_at).toLocaleString()}
+          </p>
+
+          {selectedNode.description && (
+            <div style={styles.detailSection}>
+              <p style={styles.description}>{selectedNode.description}</p>
+            </div>
+          )}
+
+          {/* Connections */}
+          <ConnectionsList
+            node={selectedNode}
+            graphData={graphData}
+            onSelectNode={handleSelectNodeById}
+          />
+        </div>
+      )}
+    </div>
+  );
+};
+
+// =============================================================================
+// Connections List
+// =============================================================================
+
+interface ConnectionsListProps {
+  node: DecisionNode;
+  graphData: GraphData;
+  onSelectNode: (id: number) => void;
+}
+
+const ConnectionsList: React.FC<ConnectionsListProps> = ({ node, graphData, onSelectNode }) => {
+  const incoming = graphData.edges.filter(e => e.to_node_id === node.id);
+  const outgoing = graphData.edges.filter(e => e.from_node_id === node.id);
+
+  const getNode = (id: number) => graphData.nodes.find(n => n.id === id);
+
+  return (
+    <>
+      {incoming.length > 0 && (
+        <div style={styles.detailSection}>
+          <h4 style={styles.sectionTitle}>Incoming ({incoming.length})</h4>
+          {incoming.map(e => {
+            const n = getNode(e.from_node_id);
+            return (
+              <div key={e.id} onClick={() => onSelectNode(e.from_node_id)} style={styles.connection}>
+                <TypeBadge type={n?.node_type || 'observation'} size="sm" />
+                <span>{truncate(n?.title || 'Unknown', 25)}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {outgoing.length > 0 && (
+        <div style={styles.detailSection}>
+          <h4 style={styles.sectionTitle}>Outgoing ({outgoing.length})</h4>
+          {outgoing.map(e => {
+            const n = getNode(e.to_node_id);
+            return (
+              <div key={e.id} onClick={() => onSelectNode(e.to_node_id)} style={styles.connection}>
+                <EdgeBadge type={e.edge_type} />
+                <TypeBadge type={n?.node_type || 'observation'} size="sm" />
+                <span>{truncate(n?.title || 'Unknown', 20)}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+};
+
+// =============================================================================
+// Styles
+// =============================================================================
+
+const styles: Record<string, React.CSSProperties> = {
+  container: {
+    height: '100%',
+    display: 'flex',
+    position: 'relative',
+    backgroundColor: '#0d1117',
+  },
+  controls: {
+    position: 'absolute',
+    top: '20px',
+    left: '20px',
+    backgroundColor: '#16213e',
+    padding: '15px',
+    borderRadius: '8px',
+    zIndex: 10,
+    width: '220px',
+  },
+  title: {
+    fontSize: '16px',
+    margin: '0 0 15px 0',
+    color: '#eee',
+  },
+  section: {
+    marginBottom: '15px',
+  },
+  label: {
+    display: 'block',
+    fontSize: '11px',
+    color: '#888',
+    marginBottom: '6px',
+    textTransform: 'uppercase',
+  },
+  select: {
+    width: '100%',
+    padding: '8px',
+    backgroundColor: '#1a1a2e',
+    border: '1px solid #333',
+    borderRadius: '4px',
+    color: '#eee',
+    fontSize: '12px',
+  },
+  legend: {
+    marginTop: '20px',
+  },
+  legendTitle: {
+    fontSize: '11px',
+    color: '#888',
+    marginBottom: '8px',
+    textTransform: 'uppercase',
+  },
+  legendItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    fontSize: '11px',
+    color: '#aaa',
+    marginBottom: '4px',
+  },
+  legendDot: {
+    width: '10px',
+    height: '10px',
+    borderRadius: '50%',
+  },
+  zoomInfo: {
+    marginTop: '15px',
+    fontSize: '11px',
+    color: '#666',
+  },
+  svgContainer: {
+    flex: 1,
+    height: '100%',
+  },
+  svg: {
+    width: '100%',
+    height: '100%',
+  },
+  detailPanel: {
+    position: 'absolute',
+    top: '20px',
+    right: '20px',
+    bottom: '20px',
+    width: '300px',
+    backgroundColor: '#16213e',
+    borderRadius: '8px',
+    padding: '20px',
+    overflowY: 'auto',
+    zIndex: 10,
+  },
+  closeBtn: {
+    position: 'absolute',
+    top: '10px',
+    right: '10px',
+    width: '28px',
+    height: '28px',
+    border: 'none',
+    background: '#333',
+    color: '#fff',
+    borderRadius: '4px',
+    fontSize: '18px',
+    cursor: 'pointer',
+  },
+  detailHeader: {
+    display: 'flex',
+    gap: '8px',
+    marginBottom: '10px',
+    flexWrap: 'wrap',
+  },
+  detailTitle: {
+    fontSize: '16px',
+    margin: '0 0 8px 0',
+    color: '#eee',
+  },
+  detailMeta: {
+    fontSize: '12px',
+    color: '#888',
+    margin: 0,
+  },
+  detailSection: {
+    marginTop: '15px',
+  },
+  sectionTitle: {
+    fontSize: '11px',
+    color: '#888',
+    margin: '0 0 8px 0',
+    textTransform: 'uppercase',
+  },
+  description: {
+    fontSize: '13px',
+    color: '#ccc',
+    lineHeight: 1.5,
+    margin: 0,
+  },
+  connection: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '6px 8px',
+    backgroundColor: '#1a1a2e',
+    borderRadius: '4px',
+    marginBottom: '4px',
+    cursor: 'pointer',
+    fontSize: '11px',
+  },
+};

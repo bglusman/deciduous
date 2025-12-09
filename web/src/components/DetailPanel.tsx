@@ -1,0 +1,209 @@
+/**
+ * Detail Panel Component
+ *
+ * Shared detail panel for displaying node information.
+ * Used by all views.
+ */
+
+import React from 'react';
+import type { DecisionNode, GraphData } from '../types/graph';
+import { truncate } from '../types/graph';
+import { NodeBadges, EdgeBadge, StatusBadge } from './NodeBadge';
+
+interface DetailPanelProps {
+  node: DecisionNode | null;
+  graphData: GraphData;
+  onSelectNode: (id: number) => void;
+  onClose?: () => void;
+  repo?: string;
+}
+
+export const DetailPanel: React.FC<DetailPanelProps> = ({
+  node,
+  graphData,
+  onSelectNode,
+  onClose,
+  repo = 'notactuallytreyanastasio/losselot',
+}) => {
+  if (!node) {
+    return (
+      <div style={styles.panel}>
+        <div style={styles.empty}>
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" style={{ opacity: 0.3 }}>
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 6v6l4 2" />
+          </svg>
+          <p style={{ marginTop: '20px' }}>Select a node to see details</p>
+        </div>
+      </div>
+    );
+  }
+
+  const incoming = graphData.edges.filter(e => e.to_node_id === node.id);
+  const outgoing = graphData.edges.filter(e => e.from_node_id === node.id);
+
+  const getNodeTitle = (id: number): string => {
+    const n = graphData.nodes.find(n => n.id === id);
+    return n?.title || 'Unknown';
+  };
+
+  return (
+    <div style={styles.panel}>
+      {onClose && (
+        <button onClick={onClose} style={styles.closeButton}>
+          ×
+        </button>
+      )}
+
+      <div style={styles.header}>
+        <NodeBadges node={node} repo={repo} />
+        <h2 style={styles.title}>{node.title}</h2>
+        <div style={styles.meta}>
+          <span>ID: {node.id}</span>
+          <span><StatusBadge status={node.status} /></span>
+          <span>Created: {new Date(node.created_at).toLocaleDateString()}</span>
+        </div>
+      </div>
+
+      {node.description && (
+        <div style={styles.description}>
+          {node.description}
+        </div>
+      )}
+
+      {incoming.length > 0 && (
+        <div style={styles.section}>
+          <h3 style={styles.sectionTitle}>Incoming ({incoming.length})</h3>
+          {incoming.map(edge => (
+            <div
+              key={edge.id}
+              style={styles.connection}
+              onClick={() => onSelectNode(edge.from_node_id)}
+            >
+              <EdgeBadge type={edge.edge_type} />
+              <span style={styles.arrow}>←</span>
+              <span>{truncate(getNodeTitle(edge.from_node_id), 50)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {outgoing.length > 0 && (
+        <div style={styles.section}>
+          <h3 style={styles.sectionTitle}>Outgoing ({outgoing.length})</h3>
+          {outgoing.map(edge => (
+            <div
+              key={edge.id}
+              style={styles.connection}
+              onClick={() => onSelectNode(edge.to_node_id)}
+            >
+              <EdgeBadge type={edge.edge_type} />
+              <span style={styles.arrow}>→</span>
+              <span>{truncate(getNodeTitle(edge.to_node_id), 50)}</span>
+              {edge.rationale && (
+                <span style={styles.rationale}>{edge.rationale}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={styles.navLinks}>
+        <a href="../decision-graph" style={styles.link}>Learn about the graph →</a>
+        <a href="../claude-tooling" style={styles.link}>See the tooling →</a>
+      </div>
+    </div>
+  );
+};
+
+const styles: Record<string, React.CSSProperties> = {
+  panel: {
+    padding: '25px',
+    height: '100%',
+    overflowY: 'auto',
+    backgroundColor: '#1a1a2e',
+    position: 'relative',
+  },
+  empty: {
+    textAlign: 'center',
+    color: '#666',
+    paddingTop: '80px',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: '15px',
+    right: '15px',
+    width: '30px',
+    height: '30px',
+    border: 'none',
+    background: '#333',
+    color: '#fff',
+    borderRadius: '4px',
+    fontSize: '20px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  header: {
+    marginBottom: '20px',
+  },
+  title: {
+    fontSize: '24px',
+    margin: '12px 0 8px 0',
+    color: '#eee',
+  },
+  meta: {
+    display: 'flex',
+    gap: '20px',
+    fontSize: '14px',
+    color: '#888',
+    flexWrap: 'wrap',
+  },
+  description: {
+    backgroundColor: '#16213e',
+    padding: '20px',
+    borderRadius: '8px',
+    marginBottom: '20px',
+    lineHeight: 1.6,
+    color: '#ddd',
+  },
+  section: {
+    marginTop: '20px',
+  },
+  sectionTitle: {
+    fontSize: '16px',
+    marginBottom: '12px',
+    color: '#888',
+  },
+  connection: {
+    padding: '10px',
+    backgroundColor: '#16213e',
+    borderRadius: '6px',
+    marginBottom: '8px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s',
+  },
+  arrow: {
+    color: '#666',
+  },
+  rationale: {
+    color: '#666',
+    fontSize: '11px',
+    marginLeft: 'auto',
+  },
+  navLinks: {
+    marginTop: '20px',
+    paddingTop: '20px',
+    borderTop: '1px solid #333',
+  },
+  link: {
+    color: '#00d9ff',
+    textDecoration: 'none',
+    marginRight: '20px',
+    fontSize: '13px',
+  },
+};

@@ -1,4 +1,4 @@
-.PHONY: build release debug test test-verbose clean install uninstall serve analyze gen-test-files fmt lint check help db-nodes db-edges db-graph db-commands db-backup db-view goal decision option action outcome obs link status sync-graph deploy
+.PHONY: build release debug test test-verbose clean install uninstall serve analyze gen-test-files fmt lint check help db-nodes db-edges db-graph db-commands db-backup db-view goal decision option action outcome obs link status sync-graph deploy web-install web-dev web-build web-typecheck web-test web-preview
 
 # Default target
 all: release
@@ -246,6 +246,15 @@ help:
 	@echo "Deploy:"
 	@echo "  make sync-graph   Export decision graph to docs/demo/graph-data.json"
 	@echo "  make deploy       Sync graph and push to main (triggers Pages build)"
+	@echo ""
+	@echo "Web Viewer (React + TypeScript + Vite):"
+	@echo "  make web          Sync graph data and start dev server"
+	@echo "  make web-dev      Start development server (http://localhost:3001)"
+	@echo "  make web-build    Build production bundle"
+	@echo "  make web-typecheck  Run TypeScript type checking"
+	@echo "  make web-test     Run web tests"
+	@echo "  make web-preview  Preview production build"
+	@echo "  make web-sync     Sync graph data to web/public/"
 
 # ============ Deploy ============
 
@@ -260,3 +269,40 @@ deploy: sync-graph
 	@echo "Decision graph synced. Ready to commit and push."
 	@echo "Files changed:"
 	@git status --short docs/demo/graph-data.json
+
+# ============ Web Viewer (React + TypeScript + Vite) ============
+
+WEB_DIR := web
+
+# Install web dependencies
+web-install:
+	cd $(WEB_DIR) && npm install
+
+# Start development server (hot reload)
+web-dev: web-install
+	@echo "Starting web viewer at http://localhost:3001"
+	cd $(WEB_DIR) && npm run dev
+
+# Build production bundle
+web-build: web-install
+	cd $(WEB_DIR) && npm run build
+
+# TypeScript type checking
+web-typecheck:
+	cd $(WEB_DIR) && npm run typecheck
+
+# Run web tests
+web-test:
+	cd $(WEB_DIR) && npm run test
+
+# Preview production build
+web-preview: web-build
+	cd $(WEB_DIR) && npm run preview
+
+# Sync graph data to web public folder (for dev)
+web-sync: sync-graph
+	cp docs/demo/graph-data.json $(WEB_DIR)/public/
+	@echo "Graph data synced to web/public/"
+
+# Full web development workflow
+web: web-sync web-dev

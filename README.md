@@ -200,13 +200,23 @@ The project includes a `CLAUDE.md` file that tells Claude:
 ### Makefile Shortcuts
 
 ```bash
+# Decision Graph Commands
 make obs T="Found interesting pattern" C=80     # Observation
 make decision T="Choose approach" C=70          # Decision point
 make action T="Implemented fix" C=95            # Implementation
 make outcome T="Tests pass" C=90                # Result
 make link FROM=1 TO=2 REASON="because"          # Connect nodes
 make sync-graph                                 # Export to live site
+
+# Web Viewer Commands (React + TypeScript + Vite)
+make web                # Sync graph data and start dev server
+make web-dev            # Start dev server at http://localhost:3001
+make web-build          # Build production bundle
+make web-typecheck      # Run TypeScript type checking
+make web-test           # Run web tests
 ```
+
+**Note:** All commands should be run via `make` targets. This is the primary entrypoint for Claude skills and automation.
 
 ### TypeScript Types
 
