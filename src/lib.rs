@@ -1,68 +1,47 @@
-//! Losselot - Detect fake lossless audio files
+//! Deciduous - Decision graph tooling for AI-assisted development
 //!
-//! Losselot analyzes audio files to detect if they were transcoded from
-//! lossy sources (MP3, AAC) and falsely labeled as lossless (FLAC, WAV).
+//! Track every decision, query your reasoning, preserve context across sessions.
 //!
 //! # Overview
 //!
-//! When audio is encoded to a lossy format like MP3, high frequencies are
-//! permanently removed to save space. Converting an MP3 back to FLAC doesn't
-//! restore these frequencies - it just makes a bigger file that still sounds
-//! like an MP3. Losselot detects this by analyzing the frequency content.
+//! Deciduous provides a persistent decision graph that survives context loss.
+//! Every goal, decision, option, action, and outcome is captured and linked,
+//! creating a queryable history of your development process.
 //!
-//! # Detection Methods
+//! # Node Types
 //!
-//! 1. **Binary Analysis** (MP3 only): Reads LAME encoder headers which honestly
-//!    record the lowpass filter frequency. A "320kbps" file with 16kHz lowpass
-//!    was transcoded from a 128kbps source.
-//!
-//! 2. **Spectral Analysis** (all formats): Uses FFT to measure energy in
-//!    frequency bands. Transcoded files show a characteristic "cliff" where
-//!    high frequencies suddenly drop to silence.
+//! | Type | Purpose |
+//! |------|---------|
+//! | `goal` | High-level objectives |
+//! | `decision` | Choice points with options |
+//! | `option` | Approaches considered |
+//! | `action` | What was implemented |
+//! | `outcome` | What happened |
+//! | `observation` | Technical insights |
 //!
 //! # Quick Start
 //!
 //! ```no_run
-//! use losselot::{Analyzer, Verdict};
+//! use deciduous::Database;
 //!
-//! let analyzer = Analyzer::new();
-//! let result = analyzer.analyze("suspicious.flac");
+//! let db = Database::new("deciduous.db").unwrap();
 //!
-//! match result.verdict {
-//!     Verdict::Ok => println!("Looks legitimate"),
-//!     Verdict::Suspect => println!("Something's off - investigate"),
-//!     Verdict::Transcode => println!("Definitely fake!"),
-//!     Verdict::Error => println!("Couldn't analyze: {:?}", result.error),
-//! }
+//! // Add a goal
+//! let goal_id = db.add_node("goal", "Implement feature X", None, Some(90), None).unwrap();
 //!
-//! println!("Score: {}/100", result.combined_score);
-//! println!("Flags: {:?}", result.flags);
+//! // Add an action linked to it
+//! let action_id = db.add_node("action", "Writing the code", None, Some(85), None).unwrap();
+//! db.add_edge(goal_id, action_id, "leads_to", None).unwrap();
+//!
+//! // Query the graph
+//! let graph = db.get_graph().unwrap();
+//! println!("Nodes: {}, Edges: {}", graph.nodes.len(), graph.edges.len());
 //! ```
-//!
-//! # Scoring System
-//!
-//! Files receive a score from 0-100 based on suspicious indicators:
-//!
-//! | Score Range | Verdict | Meaning |
-//! |-------------|---------|---------|
-//! | 0-34 | OK | Appears to be genuine lossless |
-//! | 35-64 | SUSPECT | Some indicators of lossy origin |
-//! | 65-100 | TRANSCODE | Strong evidence of fake file |
-//!
-//! # Modules
-//!
-//! - [`analyzer`]: Core analysis engine combining binary and spectral methods
-//! - [`mp3`]: MP3 frame parsing and LAME header extraction
-//! - [`report`]: Output formatters (JSON, CSV)
 
-pub mod analyzer;
 pub mod db;
-pub mod mp3;
-pub mod report;
 pub mod schema;
 pub mod serve;
 
-pub use analyzer::{AnalysisResult, Analyzer, Verdict};
 pub use db::{
     CommandLog, Database, DbRecord, DbSummary, DecisionEdge, DecisionGraph, DecisionNode,
     CURRENT_SCHEMA,
@@ -72,34 +51,9 @@ pub use db::{
 mod tests {
     use super::*;
 
-    // ==========================================================================
-    // PUBLIC API TESTS
-    // ==========================================================================
-    //
-    // These tests verify the public API surface is correct and documented.
-    // ==========================================================================
-
     #[test]
     fn test_public_exports() {
         // Verify core types are re-exported from crate root
-        let _: Verdict = Verdict::Ok;
-        let _analyzer = Analyzer::new();
-        // AnalysisResult requires many fields, verified in analyzer tests
-    }
-
-    #[test]
-    fn test_analyzer_accessible() {
-        // Analyzer should be constructible from crate root
-        let analyzer = Analyzer::new();
-        assert!(!analyzer.skip_spectral);
-    }
-
-    #[test]
-    fn test_verdict_variants() {
-        // All verdict variants should be accessible
-        let _ = Verdict::Ok;
-        let _ = Verdict::Suspect;
-        let _ = Verdict::Transcode;
-        let _ = Verdict::Error;
+        let _ = CURRENT_SCHEMA;
     }
 }
