@@ -355,14 +355,17 @@ git log -10        # Recent commits
 // ============================================================================
 
 /// Windsurf main rule - placed in .windsurf/rules/deciduous.md
-/// "Always On" trigger ensures Cascade enforces decision graph workflow on every interaction
+/// NOTE: After running `deciduous init --windsurf`, open Windsurf's Customizations panel
+/// and set this rule's activation mode to "Always On" for continuous enforcement.
 const WINDSURF_DECIDUOUS_RULE: &str = r#"---
-trigger: always
+description: Decision graph workflow - log all goals, decisions, actions, and outcomes in real-time using deciduous CLI
+globs:
+alwaysApply: true
 ---
 
 <decision_graph_workflow>
 
-# Decision Graph - ALWAYS ON
+# Decision Graph Workflow
 
 This project uses Deciduous for persistent decision tracking. You MUST log decisions in real-time.
 
@@ -425,10 +428,11 @@ deciduous sync
 "#;
 
 /// Windsurf context rule - placed in .windsurf/rules/context.md
-/// Model-triggered rule that fires when Cascade detects session start or context questions
+/// Model-triggered rule for session recovery
 const WINDSURF_CONTEXT_RULE: &str = r#"---
-trigger: model
-description: Use when starting a new session, recovering context, or when the user asks about previous work
+description: Context recovery - query decision graph at session start or when recovering from context loss
+globs:
+alwaysApply: false
 ---
 
 <context_recovery>
@@ -692,13 +696,18 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
             println!("  3. Use {} or {} slash commands", "/decision".cyan(), "/context".cyan());
         }
         Editor::Windsurf => {
-            println!("  3. Cascade will auto-enforce rules from {}", ".windsurf/rules/".cyan());
-            println!("     - {} (Always On)", "deciduous.md".cyan());
-            println!("     - {} (Model-triggered)", "context.md".cyan());
-            println!("     - {} (Auto-retrieved memories)", ".windsurf/memories.md".cyan());
+            println!("  3. Rules created in {}", ".windsurf/rules/".cyan());
+            println!("     - {} (set to Always On)", "deciduous.md".cyan());
+            println!("     - {} (model-triggered)", "context.md".cyan());
+            println!("     - {} (auto-retrieved)", ".windsurf/memories.md".cyan());
+            println!();
+            println!("{}", "  ⚠️  IMPORTANT: Verify rule activation in Windsurf:".yellow().bold());
+            println!("     Open Windsurf → Cascade → Customizations (gear icon)");
+            println!("     Ensure {} is set to {}", "deciduous.md".cyan(), "\"Always On\"".green());
         }
     }
 
+    println!();
     println!("  4. Commit and push: {}", "git add docs/ .github/ && git push".cyan());
     println!("  5. Enable GitHub Pages (Settings → Pages → Source: Deploy from branch, gh-pages)");
     println!();

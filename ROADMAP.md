@@ -94,3 +94,18 @@
   - Define standard tasks with known-good solutions
   - Version-controlled benchmark definitions
   - CI integration for regression testing model capabilities
+
+### Prompt Tracking
+- [ ] Capture prompts alongside decisions
+  - Store the exact user prompt that triggered a goal/decision
+  - Link prompts to their resulting decision chains
+- [ ] `deciduous add goal "Title" --prompt "User's original request"`
+- [ ] Prompt history view in web UI
+  - See what prompt led to each decision chain
+  - Search/filter by prompt content
+- [ ] Prompt templates
+  - Save effective prompts for reuse
+  - Share prompt patterns that lead to good decision trees
+- [ ] Prompt → Outcome analysis
+  - Correlate prompt patterns with successful outcomes
+  - Identify which prompt styles lead to better decisions
