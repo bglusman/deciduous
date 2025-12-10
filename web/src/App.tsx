@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useGraphData } from './hooks/useGraphData';
 import { useChains } from './hooks/useChains';
 import { Layout } from './components/Layout';
@@ -14,9 +14,13 @@ import { TimelineView } from './views/TimelineView';
 import { GraphView } from './views/GraphView';
 import { DagView } from './views/DagView';
 
+// Detect if running from deciduous serve (localhost) vs static file (GitHub Pages)
+const isLocalServer = typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
 export const App: React.FC = () => {
   // Load graph data with optional SSE for live updates
-  // Use static file by default; only use /api/graph when deciduous serve is running
+  // Use /api/graph when running from deciduous serve, static file for GitHub Pages
   const {
     graphData,
     gitHistory,
@@ -24,7 +28,7 @@ export const App: React.FC = () => {
     error,
     lastUpdated,
   } = useGraphData({
-    graphUrl: './graph-data.json',
+    graphUrl: isLocalServer ? '/api/graph' : './graph-data.json',
     gitHistoryUrl: './git-history.json',
     enableSSE: false, // Disable SSE until deciduous serve is implemented
   });
@@ -69,7 +73,7 @@ export const App: React.FC = () => {
   }
 
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Layout stats={stats} lastUpdated={lastUpdated}>
         <Routes>
           <Route
@@ -110,7 +114,7 @@ export const App: React.FC = () => {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>
-    </BrowserRouter>
+    </HashRouter>
   );
 };
 

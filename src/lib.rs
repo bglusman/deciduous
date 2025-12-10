@@ -39,6 +39,7 @@
 //! ```
 
 pub mod db;
+pub mod init;
 pub mod schema;
 pub mod serve;
 

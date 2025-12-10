@@ -1,309 +1,288 @@
-# Losselot
+# Deciduous
 
-**Audio forensics meets AI-assisted development.**
+**Decision graph tooling for AI-assisted development.**
 
-Losselot started as a tool to detect fake lossless audio files. It evolved into something more: a living experiment in how AI and humans can build software together, with every decision tracked and queryable.
+Track every goal, decision, and outcome. Survive context loss. Query your reasoning.
 
-![Losselot Demo](docs/demo.gif)
+```bash
+cargo install deciduous
+cd your-project
+deciduous init
+deciduous serve
+```
+
+**[Live Demo](https://notactuallytreyanastasio.github.io/deciduous/)** | **[Browse the Graph](https://notactuallytreyanastasio.github.io/deciduous/graph/)**
 
 ---
 
-## What This Project Is
+## The Problem
 
-**Two things at once:**
+Claude (and LLMs generally) lose context. Sessions end, memory compacts, decisions evaporate. Six months later, no one remembers *why* you chose approach A over approach B.
 
-1. **An Audio Forensics Tool** - Detect if your FLAC/WAV files are actually transcoded from MP3s. Uses spectral analysis, binary metadata parsing, and lo-fi detection to expose the truth.
+## The Solution
 
-2. **A Living Museum** - Every algorithm choice, every rejected approach, every "why did we do it this way?" is captured in a queryable decision graph. Watch the project evolve in real-time.
+Every decision is tracked in a queryable graph that persists forever:
 
-**[Explore the Live Site](https://notactuallytreyanastasio.github.io/losselot/)** | **[Browse the Decision Graph](https://notactuallytreyanastasio.github.io/losselot/demo/)**
+```bash
+deciduous add goal "Implement user authentication" -c 90
+deciduous add decision "Choose auth method" -c 75
+deciduous add option "JWT tokens" -c 80
+deciduous add option "Session cookies" -c 70
+deciduous link 1 2 -r "Goal requires a decision"
+deciduous link 2 3 -r "Option A"
+deciduous link 2 4 -r "Option B"
+```
+
+View your graph at `localhost:3000`:
+
+```bash
+deciduous serve
+```
 
 ---
 
 ## Quick Start
 
-```bash
-git clone https://github.com/notactuallytreyanastasio/losselot.git
-cd losselot
-cargo build --release
-./target/release/losselot serve examples/ --port 3000
-```
-
-Open [localhost:3000](http://localhost:3000) - you'll see the interactive analysis UI.
-
-**No test files?** Generate them:
-```bash
-cd examples && ./generate_test_files.sh
-```
-
----
-
-## Downloads
-
-| Platform | Download |
-|----------|----------|
-| **Mac (Apple Silicon)** | [Download](https://github.com/notactuallytreyanastasio/losselot/releases/latest/download/losselot-darwin-arm64) |
-| **Mac (Intel)** | [Download](https://github.com/notactuallytreyanastasio/losselot/releases/latest/download/losselot-darwin-amd64) |
-| **Windows** | [Download](https://github.com/notactuallytreyanastasio/losselot/releases/latest/download/losselot-windows-amd64.exe) |
-| **Linux (AppImage)** | [Download](https://github.com/notactuallytreyanastasio/losselot/releases/latest/download/losselot-linux-amd64.AppImage) |
-| **Linux (CLI)** | [Download](https://github.com/notactuallytreyanastasio/losselot/releases/latest/download/losselot-linux-amd64) |
-
----
-
-## The Verdicts
-
-| Verdict | Score | Meaning |
-|---------|-------|---------|
-| **CLEAN** | 0-34 | Genuine lossless - natural frequency content |
-| **SUSPECT** | 35-64 | Something's off - investigate further |
-| **TRANSCODE** | 65-100 | Fake lossless - clear compression damage |
-
----
-
-<details>
-<summary><b>Audio Analysis Deep Dive</b></summary>
-
-### How Detection Works
-
-#### Spectral Analysis
-
-Lossy codecs remove high frequencies to save space. The "scars" are permanent:
-
-| Source | Typical Cutoff |
-|--------|----------------|
-| 128kbps MP3 | ~16kHz |
-| 192kbps MP3 | ~18kHz |
-| 320kbps MP3 | ~20kHz |
-| True Lossless | ~22kHz |
-
-#### Binary Analysis (MP3)
-
-For MP3 files, we read encoder metadata (LAME headers). A "320kbps" file with a 16kHz lowpass was definitely transcoded from 128kbps - the encoder honestly reports what it kept.
-
-#### Lo-Fi Detection (CFCC)
-
-Not all high-frequency rolloff is compression damage. Tape recordings have natural rolloff.
-
-**The difference:**
-- **MP3**: Brick-wall cutoff at fixed frequency
-- **Tape**: Gradual rolloff that varies with dynamics
-
-We use Cross-Frequency Coherence (CFCC) to distinguish them.
-
-#### Re-encoding Detection
-
-Multiple encoder signatures = multiple lossy passes = cumulative damage. We detect LAME, FFmpeg, Fraunhofer, and chains between them.
-
-### Detection Flags
-
-**Spectral:**
-- `severe_hf_damage` - Major frequency loss
-- `hf_cutoff_detected` - Clear lossy cutoff found
-- `dead_ultrasonic_band` - No content above 20kHz
-
-**Re-encoding:**
-- `multi_encoder_sigs` - Multiple encoders detected
-- `encoding_chain(LAME → FFmpeg)` - Specific chain identified
-- `lame_reencoded_x2` - Re-encoded through LAME twice
-
-### Supported Formats
-
-FLAC, WAV, AIFF, MP3, M4A, AAC, OGG, Opus, ALAC
-
-</details>
-
----
-
-<details>
-<summary><b>Decision Graph & Memory System</b></summary>
-
-### The Problem
-
-Claude (and LLMs generally) lose context. Sessions end, memory compacts, decisions evaporate. Six months later, no one remembers *why* we chose CFCC over temporal variance analysis.
-
-### The Solution
-
-Every decision is tracked in a queryable graph that persists forever:
+### 1. Install
 
 ```bash
-# See all decisions ever made
-./target/release/losselot db nodes
-
-# See how they connect
-./target/release/losselot db edges
-
-# Full graph as JSON
-./target/release/losselot db graph
+cargo install deciduous
 ```
 
-### Node Types
+### 2. Initialize in your project
 
-| Type | Purpose |
+```bash
+cd your-project
+deciduous init
+```
+
+This creates:
+- `.deciduous/` - Database directory
+- `.claude/commands/decision.md` - `/decision` slash command
+- `.claude/commands/context.md` - `/context` slash command
+- `CLAUDE.md` - Project instructions with workflow section
+- `.gitignore` - Ignores `.deciduous/`
+
+### 3. Start tracking
+
+```bash
+# Add nodes
+deciduous add goal "Build feature X" -c 90
+deciduous add action "Implementing feature X" -c 85
+
+# Link them
+deciduous link 1 2 -r "Goal leads to action"
+
+# View the graph
+deciduous serve
+```
+
+### 4. Query your history
+
+```bash
+deciduous nodes     # List all decisions
+deciduous edges     # List all connections
+deciduous graph     # Export full JSON
+```
+
+---
+
+## Node Types
+
+| Type | Purpose | Example |
+|------|---------|---------|
+| `goal` | High-level objectives | "Add user authentication" |
+| `decision` | Choice points with options | "Choose auth method" |
+| `option` | Approaches considered | "Use JWT tokens" |
+| `action` | What was implemented | "Added JWT middleware" |
+| `outcome` | What happened | "JWT auth working" |
+| `observation` | Technical insights | "Existing code uses sessions" |
+
+## Edge Types
+
+| Type | Meaning |
 |------|---------|
-| **Goal** | High-level objectives |
-| **Decision** | Choice points with options |
-| **Option** | Approaches considered |
-| **Action** | What was implemented |
-| **Outcome** | What happened |
-| **Observation** | Technical insights |
+| `leads_to` | Natural progression |
+| `chosen` | Selected option |
+| `rejected` | Not selected (include reason!) |
+| `requires` | Dependency |
+| `blocks` | Preventing progress |
+| `enables` | Makes something possible |
 
-### Confidence Weights
+---
+
+## Claude Integration
+
+Deciduous creates Claude slash commands automatically:
+
+### `/context` - Session Start
+
+Run this at the start of every session to recover context:
+
+```
+/context
+```
+
+This queries the decision graph and git state, then reports:
+- Recent decisions (especially pending/active ones)
+- Current branch and pending changes
+- Suggested next steps
+
+### `/decision` - Log Decisions
+
+Log decisions as you work:
+
+```
+/decision add goal "Add dark mode"
+/decision add action "Implementing theme toggle"
+/decision link 1 2 "Goal leads to action"
+/decision nodes
+```
+
+### The Workflow
+
+```
+SESSION START
+    |
+Run /context -> See past decisions
+    |
+DO WORK -> Log BEFORE each action
+    |
+AFTER CHANGES -> Log outcomes
+    |
+BEFORE PUSH -> deciduous sync
+    |
+SESSION END -> Graph survives
+```
+
+---
+
+## Commands
+
+```bash
+# Initialize
+deciduous init                          # Set up in current directory
+
+# Add nodes
+deciduous add <type> "<title>" [-c CONF] [--commit HASH]
+# Types: goal, decision, option, action, outcome, observation
+
+# Link nodes
+deciduous link <from> <to> [-r "reason"] [-t edge_type]
+
+# Query
+deciduous nodes                         # List all nodes
+deciduous edges                         # List all edges
+deciduous graph                         # Full JSON export
+
+# Serve
+deciduous serve [--port 3000]           # Start web viewer
+
+# Export
+deciduous sync [-o path]                # Export to JSON file
+deciduous backup [-o path]              # Create database backup
+
+# Status
+deciduous status <id> <status>          # Update node status
+deciduous commands [-l 20]              # Show recent command log
+```
+
+---
+
+## Confidence Weights
 
 Every node can have a confidence score (0-100):
 
 ```bash
-# Add with confidence
-./target/release/losselot db add-node -t decision "Use CFCC" -c 85
+deciduous add decision "Use CFCC algorithm" -c 85
 ```
 
-- **70-100**: High confidence - proven approach
-- **40-69**: Medium - reasonable, some uncertainty
-- **0-39**: Low - experimental
+| Range | Meaning |
+|-------|---------|
+| 90-100 | Certain, proven, tested |
+| 70-89 | High confidence, standard approach |
+| 50-69 | Moderate, some unknowns |
+| 30-49 | Experimental, might change |
+| 0-29 | Speculative, likely to revisit |
 
-### Commit Linking
+## Commit Linking
 
 Link decisions to specific code changes:
 
 ```bash
-./target/release/losselot db add-node -t action "Implemented feature" -c 90 --commit abc123
+deciduous add action "Implemented feature" -c 90 --commit abc123
 ```
 
-The demo UI shows clickable commit badges that link to GitHub.
-
-### Why This Matters
-
-- **Queryable history**: "Why didn't we use temporal variance?" → search the graph
-- **Rejected approaches preserved**: What *didn't* work is as valuable as what did
-- **Code-decision traceability**: Every commit linked to its reasoning
-- **Survives context loss**: The graph outlives any session
-
-### The Live Graph
-
-**[Browse it here](https://notactuallytreyanastasio.github.io/losselot/demo/)** - 75+ nodes, chains grouped by topic, confidence badges, commit links.
-
-</details>
+The web viewer shows clickable commit badges that link to GitHub.
 
 ---
 
-<details>
-<summary><b>Claude Integration & CLAUDE.md</b></summary>
+## Web Viewer
 
-### The CLAUDE.md Contract
+The built-in viewer has 4 tabs:
 
-The project includes a `CLAUDE.md` file that tells Claude:
+| Tab | View |
+|-----|------|
+| **Chains** | BFS chain detection, session grouping, sidebar navigation |
+| **Timeline** | Git commits + decisions merged chronologically |
+| **Graph** | D3.js force-directed, drag/zoom |
+| **DAG** | Dagre hierarchical layout |
 
-1. **Always start by reading the decision graph** - recover context
-2. **Log everything** - observations, decisions, actions, outcomes
-3. **Link commits to decisions** - full traceability
-4. **Sync the graph before deploying** - keep the live site current
-
-### Makefile Shortcuts
+Start it with:
 
 ```bash
-# Decision Graph Commands
-make obs T="Found interesting pattern" C=80     # Observation
-make decision T="Choose approach" C=70          # Decision point
-make action T="Implemented fix" C=95            # Implementation
-make outcome T="Tests pass" C=90                # Result
-make link FROM=1 TO=2 REASON="because"          # Connect nodes
-make sync-graph                                 # Export to live site
-
-# Web Viewer Commands (React + TypeScript + Vite)
-make web                # Sync graph data and start dev server
-make web-dev            # Start dev server at http://localhost:3001
-make web-build          # Build production bundle
-make web-typecheck      # Run TypeScript type checking
-make web-test           # Run web tests
+deciduous serve --port 3000
 ```
-
-**Note:** All commands should be run via `make` targets. This is the primary entrypoint for Claude skills and automation.
-
-### TypeScript Types
-
-The frontend has TypeScript types mirroring the Rust backend:
-
-- `DecisionNode`, `DecisionEdge`, `GraphData` (graph.ts)
-- `AnalysisResult`, `BinaryAnalysis`, `SpectralAnalysis` (analysis.ts)
-
-Tests run in CI alongside Rust tests.
-
-### The Living Museum Concept
-
-This isn't documentation written after the fact. It's a real-time record of how software gets built - captured as decisions happen, not reconstructed from memory later.
-
-</details>
 
 ---
 
-<details>
-<summary><b>Command Line Reference</b></summary>
+## GitHub Pages Deployment
+
+Export your graph for static hosting:
 
 ```bash
-# Analyze files
-./losselot ~/Music/                    # Folder
-./losselot file.flac                   # Single file
-./losselot -o report.html ~/Music/     # Custom output
-
-# Web UI
-./losselot serve ~/Music/ --port 3000
-
-# Quick scan (no spectral)
-./losselot --no-spectral ~/Music/
-
-# Decision graph
-./losselot db nodes                    # List nodes
-./losselot db edges                    # List edges
-./losselot db graph                    # Full JSON
-./losselot db add-node -t TYPE "Title" [-c CONF] [--commit HASH]
-./losselot db add-edge FROM TO [-t TYPE] [-r REASON]
+deciduous sync -o docs/graph-data.json
+git add docs/graph-data.json
+git commit -m "Update decision graph"
+git push
 ```
 
-**Exit codes:** 0=clean, 1=suspect, 2=transcode
-
-</details>
-
----
-
-<details>
-<summary><b>Build from Source</b></summary>
-
-```bash
-# Requires Rust (rustup.rs)
-git clone https://github.com/notactuallytreyanastasio/losselot.git
-cd losselot
-cargo build --release
-```
-
-### Run Tests
-
-```bash
-cargo test                    # Rust tests
-cd docs && npm test           # TypeScript tests
-```
-
-### Generate Test Files
-
-```bash
-cd examples && ./generate_test_files.sh
-```
-
-Creates files demonstrating:
-- Clean 320kbps and V0 VBR encodes
-- 128kbps → 320kbps transcodes
-- Multiple re-encoding passes
-- Mixed encoder chains
-
-</details>
+The web viewer works without a server - it reads the JSON file directly.
 
 ---
 
 ## The Story
 
-Losselot started as "does this FLAC actually contain lossless audio?" and evolved into "can we build software in a way where every decision is preserved, queryable, and linked to code?"
+Deciduous was extracted from [losselot](https://github.com/notactuallytreyanastasio/losselot), an audio forensics tool that grew into an experiment in AI-assisted development.
 
-The audio forensics works great. But the real experiment is whether decision graphs can solve the "why did we do it this way?" problem that plagues every long-running project.
+The core insight: Claude sessions lose context, but the decision graph survives. Every goal, every rejected approach, every "why did we do it this way?" is preserved and queryable.
 
-**[See for yourself](https://notactuallytreyanastasio.github.io/losselot/)**
+This isn't documentation written after the fact. It's a real-time record of how software gets built - captured as decisions happen, not reconstructed from memory later.
+
+**[Browse the live graph](https://notactuallytreyanastasio.github.io/deciduous/graph/)** to see 100+ decisions from the development process.
+
+---
+
+## Building from Source
+
+```bash
+git clone https://github.com/notactuallytreyanastasio/deciduous.git
+cd deciduous
+cargo build --release
+./target/release/deciduous --help
+```
+
+### Rebuild the Web Viewer
+
+The React viewer is bundled into the binary. To rebuild:
+
+```bash
+cd web
+npm install
+npm run build:embed
+cd ..
+cargo build --release
+```
 
 ---
 

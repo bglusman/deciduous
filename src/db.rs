@@ -9,7 +9,23 @@ use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use diesel::sqlite::SqliteConnection;
 use std::path::Path;
 
-const DEFAULT_DB_PATH: &str = "deciduous.db";
+/// Default database path - looks for .deciduous/deciduous.db in current dir
+/// Can be overridden with DECIDUOUS_DB_PATH env var
+fn get_db_path() -> std::path::PathBuf {
+    // Check env var first
+    if let Ok(path) = std::env::var("DECIDUOUS_DB_PATH") {
+        return std::path::PathBuf::from(path);
+    }
+
+    // Look for .deciduous/deciduous.db in current directory
+    let deciduous_path = std::path::PathBuf::from(".deciduous/deciduous.db");
+    if deciduous_path.exists() || deciduous_path.parent().map(|p| p.exists()).unwrap_or(false) {
+        return deciduous_path;
+    }
+
+    // Fallback to deciduous.db in current directory (for backwards compat)
+    std::path::PathBuf::from("deciduous.db")
+}
 
 /// Current schema version for deciduous
 pub const CURRENT_SCHEMA: DecisionSchema = DecisionSchema {
@@ -269,9 +285,9 @@ impl From<diesel::r2d2::Error> for DbError {
 pub type Result<T> = std::result::Result<T, DbError>;
 
 impl Database {
-    /// Get the default database path
+    /// Get the database path that will be used
     pub fn db_path() -> std::path::PathBuf {
-        std::path::PathBuf::from(DEFAULT_DB_PATH)
+        get_db_path()
     }
 
     /// Create a new database at a custom path
@@ -279,9 +295,16 @@ impl Database {
         Self::open_at(path)
     }
 
-    /// Open database at default path
+    /// Open database at default path (respects DECIDUOUS_DB_PATH env var)
     pub fn open() -> Result<Self> {
-        Self::open_at(DEFAULT_DB_PATH)
+        let path = get_db_path();
+        // Create parent directory if it doesn't exist
+        if let Some(parent) = path.parent() {
+            if !parent.exists() {
+                std::fs::create_dir_all(parent).ok();
+            }
+        }
+        Self::open_at(&path)
     }
 
     /// Open database at specified path

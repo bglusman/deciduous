@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Losselot</title>
+    <title>Deciduous - Decision Graph Tooling</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -40,19 +40,25 @@
             color: #6e7781;
         }
 
-        .hero-gif {
-            width: 100%;
+        .code-block {
+            background: #24292f;
+            color: #f6f8fa;
+            padding: 25px 30px;
             border-radius: 10px;
             margin: 40px 0;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-            border: 1px solid #d0d7de;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            font-size: 0.95rem;
+            overflow-x: auto;
         }
+        .code-block .comment { color: #8b949e; }
+        .code-block .cmd { color: #7ee787; }
 
         .buttons {
             display: flex;
             justify-content: center;
             gap: 15px;
             margin-bottom: 60px;
+            flex-wrap: wrap;
         }
         .btn {
             padding: 12px 24px;
@@ -108,56 +114,87 @@
             font-size: 0.9rem;
         }
 
-        .tech-section {
+        .problem-section {
             margin-top: 50px;
             padding-top: 30px;
             border-top: 1px solid #d0d7de;
         }
-        .tech-section h2 {
+        .problem-section h2 {
             border: none;
             padding-bottom: 0;
         }
-        .tech-section p {
+        .problem-section p {
             color: #57606a;
             margin-bottom: 15px;
         }
-        .tech-grid {
+
+        .node-types {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-top: 20px;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 25px;
         }
-        @media (max-width: 600px) {
-            .tech-grid { grid-template-columns: 1fr; }
+        @media (max-width: 700px) {
+            .node-types { grid-template-columns: repeat(2, 1fr); }
         }
-        .tech-card {
+        @media (max-width: 450px) {
+            .node-types { grid-template-columns: 1fr; }
+        }
+        .node-type {
             background: #f6f8fa;
-            padding: 20px;
+            padding: 15px;
             border-radius: 8px;
             border: 1px solid #d0d7de;
         }
-        .tech-card h3 {
+        .node-type h3 {
             color: #24292f;
-            font-size: 1rem;
-            margin-bottom: 8px;
+            font-size: 0.95rem;
+            margin-bottom: 5px;
         }
-        .tech-card p {
-            font-size: 0.9rem;
+        .node-type p {
+            font-size: 0.85rem;
             margin: 0;
+            color: #57606a;
+        }
+        .node-type.goal h3 { color: #d29922; }
+        .node-type.decision h3 { color: #0969da; }
+        .node-type.option h3 { color: #8250df; }
+        .node-type.action h3 { color: #2da44e; }
+        .node-type.outcome h3 { color: #1f6feb; }
+        .node-type.observation h3 { color: #bf3989; }
+
+        .workflow-section {
+            margin-top: 50px;
+            padding-top: 30px;
+            border-top: 1px solid #d0d7de;
+        }
+        .workflow {
+            background: #f6f8fa;
+            padding: 25px;
+            border-radius: 8px;
+            border: 1px solid #d0d7de;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            font-size: 0.9rem;
+            line-height: 1.8;
+            color: #57606a;
         }
 
-        .verdict-table {
-            width: 100%;
-            margin-top: 20px;
-            border-collapse: collapse;
-            font-size: 0.9rem;
+        .story-section {
+            margin-top: 50px;
+            padding-top: 30px;
+            border-top: 1px solid #d0d7de;
         }
-        .verdict-table th, .verdict-table td {
-            padding: 10px 15px;
-            text-align: left;
-            border-bottom: 1px solid #d0d7de;
+        .story-section p {
+            color: #57606a;
+            margin-bottom: 15px;
         }
-        .verdict-table th { color: #57606a; }
+        .story-section a {
+            color: #0969da;
+            text-decoration: none;
+        }
+        .story-section a:hover {
+            text-decoration: underline;
+        }
 
         footer {
             text-align: center;
@@ -173,82 +210,111 @@
 <body>
     <div class="container">
         <header>
-            <h1>LOSSELOT</h1>
-            <p class="tagline">Figure out if your file ever became lossy.</p>
-            <p class="tagline-secondary">Also: A tool for working with LLMs and decision trees while maintaining a codebase.</p>
+            <h1>DECIDUOUS</h1>
+            <p class="tagline">Decision graph tooling for AI-assisted development.</p>
+            <p class="tagline-secondary">Track every goal, decision, and outcome. Survive context loss. Query your reasoning.</p>
         </header>
 
-        <img src="demo.gif" alt="Losselot analyzing audio files" class="hero-gif">
+        <div class="code-block">
+            <span class="comment"># Install and set up in any project</span><br>
+            <span class="cmd">cargo install deciduous</span><br>
+            <span class="cmd">cd your-project</span><br>
+            <span class="cmd">deciduous init</span><br>
+            <span class="cmd">deciduous serve</span>
+        </div>
 
         <div class="buttons">
-            <a href="analyzer.html" class="btn btn-primary">Try in Browser</a>
-            <a href="https://github.com/notactuallytreyanastasio/losselot" class="btn btn-secondary">View on GitHub</a>
+            <a href="demo/" class="btn btn-primary">Browse the Graph</a>
+            <a href="https://github.com/notactuallytreyanastasio/deciduous" class="btn btn-secondary">View on GitHub</a>
+            <a href="https://crates.io/crates/deciduous" class="btn btn-secondary">crates.io</a>
         </div>
 
         <section class="links">
-            <h2>The Stuff</h2>
-
-            <a href="analyzer.html" class="link-item">
-                <span class="link-title">Web Analyzer</span>
-                <span class="link-desc">Drop a file, get instant analysis. Runs in-browser via WASM.</span>
-            </a>
+            <h2>Explore the Development Process</h2>
 
             <a href="demo/" class="link-item">
-                <span class="link-title">Decision Graph</span>
-                <span class="link-desc">Interactive view of 87+ development decisions. The project's memory.</span>
+                <span class="link-title">Chains View</span>
+                <span class="link-desc">115+ decisions organized by chains and sessions. The project's memory.</span>
             </a>
 
-            <a href="spelunk-timeline.html" class="link-item">
+            <a href="demo/#/timeline" class="link-item">
                 <span class="link-title">Timeline</span>
                 <span class="link-desc">Git commits merged with decision nodes. Filter, search, trace.</span>
             </a>
 
-            <a href="spelunk-graph.html" class="link-item">
+            <a href="demo/#/graph" class="link-item">
                 <span class="link-title">Graph Explorer</span>
-                <span class="link-desc">Force-directed visualization. Zoom, pan, find paths.</span>
+                <span class="link-desc">Force-directed visualization. Zoom, pan, find paths between decisions.</span>
             </a>
 
-            <a href="spelunk-story.html" class="link-item">
-                <span class="link-title">The Story</span>
-                <span class="link-desc">Narrative walkthrough of how this project evolved.</span>
-            </a>
-
-            <a href="claude-tooling" class="link-item">
-                <span class="link-title">Claude Tooling</span>
-                <span class="link-desc">How AI-assisted development works here.</span>
-            </a>
-
-            <a href="decision-graph" class="link-item">
-                <span class="link-title">About Decision Graphs</span>
-                <span class="link-desc">Why track decisions? How the memory system works.</span>
+            <a href="demo/#/dag" class="link-item">
+                <span class="link-title">DAG View</span>
+                <span class="link-desc">Hierarchical layout showing decision flow from goals to outcomes.</span>
             </a>
         </section>
 
-        <section class="tech-section">
-            <h2>How Detection Works</h2>
-            <p>When someone converts MP3 to FLAC, the removed frequencies don't come back. Losselot finds these scars.</p>
+        <section class="problem-section">
+            <h2>The Problem</h2>
+            <p>Claude (and LLMs generally) lose context. Sessions end, memory compacts, decisions evaporate. Six months later, no one remembers <em>why</em> you chose approach A over approach B.</p>
+            <p>Deciduous solves this by tracking every decision in a queryable graph that persists forever.</p>
 
-            <div class="tech-grid">
-                <div class="tech-card">
-                    <h3>Spectral Analysis</h3>
-                    <p>FFT detects frequency cutoffs. 128kbps MP3 cuts at ~16kHz, 320kbps at ~20kHz. We find where the music stops.</p>
+            <div class="node-types">
+                <div class="node-type goal">
+                    <h3>Goal</h3>
+                    <p>High-level objectives</p>
                 </div>
-                <div class="tech-card">
-                    <h3>Binary Analysis</h3>
-                    <p>Encoder signatures hide in files. LAME headers, FFmpeg markers, re-encoding chains. Metadata doesn't lie.</p>
+                <div class="node-type decision">
+                    <h3>Decision</h3>
+                    <p>Choice points with options</p>
+                </div>
+                <div class="node-type option">
+                    <h3>Option</h3>
+                    <p>Approaches considered</p>
+                </div>
+                <div class="node-type action">
+                    <h3>Action</h3>
+                    <p>What was implemented</p>
+                </div>
+                <div class="node-type outcome">
+                    <h3>Outcome</h3>
+                    <p>What happened</p>
+                </div>
+                <div class="node-type observation">
+                    <h3>Observation</h3>
+                    <p>Technical insights</p>
                 </div>
             </div>
+        </section>
 
-            <table class="verdict-table">
-                <tr><th>Score</th><th>Verdict</th><th>Meaning</th></tr>
-                <tr><td>0-34</td><td>OK</td><td>Likely genuine lossless</td></tr>
-                <tr><td>35-64</td><td>SUSPECT</td><td>Possibly transcoded</td></tr>
-                <tr><td>65+</td><td>TRANSCODE</td><td>Definitely lossy origin</td></tr>
-            </table>
+        <section class="workflow-section">
+            <h2>The Workflow</h2>
+            <div class="workflow">
+SESSION START<br>
+&nbsp;&nbsp;&nbsp;&nbsp;|<br>
+Run /context -> See past decisions<br>
+&nbsp;&nbsp;&nbsp;&nbsp;|<br>
+DO WORK -> Log BEFORE each action<br>
+&nbsp;&nbsp;&nbsp;&nbsp;|<br>
+AFTER CHANGES -> Log outcomes<br>
+&nbsp;&nbsp;&nbsp;&nbsp;|<br>
+BEFORE PUSH -> deciduous sync<br>
+&nbsp;&nbsp;&nbsp;&nbsp;|<br>
+SESSION END -> Graph survives
+            </div>
+        </section>
+
+        <section class="story-section">
+            <h2>The Story</h2>
+            <p>Deciduous was extracted from <a href="https://github.com/notactuallytreyanastasio/losselot">losselot</a>, an audio forensics tool that grew into an experiment in AI-assisted development.</p>
+            <p>The core insight: Claude sessions lose context, but the decision graph survives. Every goal, every rejected approach, every "why did we do it this way?" is preserved and queryable.</p>
+            <p>This isn't documentation written after the fact. It's a real-time record of how software gets built - captured as decisions happen, not reconstructed from memory later.</p>
+            <p><a href="demo/">Browse the live graph</a> to see 115+ decisions from the development process.</p>
         </section>
 
         <footer>
-            <a href="https://github.com/notactuallytreyanastasio/losselot">GitHub</a>
+            <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a> |
+            <a href="https://crates.io/crates/deciduous">crates.io</a> |
+            MIT License
         </footer>
     </div>
 </body>

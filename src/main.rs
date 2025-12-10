@@ -14,6 +14,9 @@ struct Args {
 
 #[derive(Subcommand, Debug)]
 enum Command {
+    /// Initialize deciduous in current directory
+    Init,
+
     /// Add a new node to the decision graph
     Add {
         /// Node type: goal, decision, option, action, outcome, observation
@@ -102,6 +105,15 @@ enum Command {
 fn main() {
     let args = Args::parse();
 
+    // Handle init separately - it doesn't need an existing database
+    if let Command::Init = args.command {
+        if let Err(e) = deciduous::init::init_project() {
+            eprintln!("{} {}", "Error:".red(), e);
+            std::process::exit(1);
+        }
+        return;
+    }
+
     let db = match Database::open() {
         Ok(db) => db,
         Err(e) => {
@@ -111,6 +123,7 @@ fn main() {
     };
 
     match args.command {
+        Command::Init => unreachable!(), // Handled above
         Command::Add { node_type, title, description, confidence, commit } => {
             match db.create_node(&node_type, &title, description.as_deref(), confidence, commit.as_deref()) {
                 Ok(id) => {

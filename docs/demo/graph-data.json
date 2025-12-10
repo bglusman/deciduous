@@ -1069,6 +1069,186 @@
       "created_at": "2025-12-09T17:47:50.768806-05:00",
       "updated_at": "2025-12-09T17:47:50.768806-05:00",
       "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 108,
+      "node_type": "action",
+      "title": "Creating PR for Phase A: React unified graph viewer",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T17:54:50.634173-05:00",
+      "updated_at": "2025-12-09T17:54:50.634173-05:00",
+      "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 109,
+      "node_type": "outcome",
+      "title": "PR #20 created for Phase A React unified graph viewer",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T17:56:35.179575-05:00",
+      "updated_at": "2025-12-09T17:56:35.179575-05:00",
+      "metadata_json": "{\"confidence\":95}"
+    },
+    {
+      "id": 110,
+      "node_type": "action",
+      "title": "Starting Phase B: Fork losselot to deciduous repository using gh CLI",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T17:56:53.538450-05:00",
+      "updated_at": "2025-12-09T17:56:53.538450-05:00",
+      "metadata_json": "{\"confidence\":85}"
+    },
+    {
+      "id": 111,
+      "node_type": "outcome",
+      "title": "Deciduous repo created and populated with full git history from losselot",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T17:57:27.318580-05:00",
+      "updated_at": "2025-12-09T17:57:27.318580-05:00",
+      "metadata_json": "{\"confidence\":95}"
+    },
+    {
+      "id": 112,
+      "node_type": "action",
+      "title": "Starting Phase C: Remove audio/WASM code from deciduous, keep decision graph",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T18:02:25.373688-05:00",
+      "updated_at": "2025-12-09T18:02:25.373688-05:00",
+      "metadata_json": "{\"confidence\":85}"
+    },
+    {
+      "id": 113,
+      "node_type": "action",
+      "title": "Phase C: Remove audio/WASM code from deciduous repo - working in separate ~/code/deciduous directory",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T18:09:06.738783-05:00",
+      "updated_at": "2025-12-09T18:09:06.738783-05:00",
+      "metadata_json": "{\"confidence\":85}"
+    },
+    {
+      "id": 114,
+      "node_type": "observation",
+      "title": "Realized was editing losselot directly - need to work in forked deciduous repo to keep losselot working",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T18:09:07.801529-05:00",
+      "updated_at": "2025-12-09T18:09:07.801529-05:00",
+      "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 115,
+      "node_type": "outcome",
+      "title": "Deciduous builds successfully - audio code removed, CLI restructured",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T18:13:35.897568-05:00",
+      "updated_at": "2025-12-09T18:13:35.897568-05:00",
+      "metadata_json": "{\"confidence\":95}"
+    },
+    {
+      "id": 116,
+      "node_type": "goal",
+      "title": "GitHub Pages deployment for deciduous",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T22:09:58.072197-05:00",
+      "updated_at": "2025-12-09T22:09:58.072197-05:00",
+      "metadata_json": "{\"confidence\":95}"
+    },
+    {
+      "id": 117,
+      "node_type": "decision",
+      "title": "Dual build strategy for React viewer",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T22:09:58.262524-05:00",
+      "updated_at": "2025-12-09T22:09:58.262524-05:00",
+      "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 118,
+      "node_type": "option",
+      "title": "build:embed - Single HTML for Rust binary embedding",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T22:10:07.449083-05:00",
+      "updated_at": "2025-12-09T22:10:07.449083-05:00",
+      "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 119,
+      "node_type": "option",
+      "title": "build:pages - Separate assets for GitHub Pages static hosting",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T22:10:07.632887-05:00",
+      "updated_at": "2025-12-09T22:10:07.632887-05:00",
+      "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 120,
+      "node_type": "action",
+      "title": "Switched from BrowserRouter to HashRouter for static hosting compatibility",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T22:10:07.784800-05:00",
+      "updated_at": "2025-12-09T22:10:07.784800-05:00",
+      "metadata_json": "{\"confidence\":95}"
+    },
+    {
+      "id": 121,
+      "node_type": "action",
+      "title": "Created landing page at docs/index.html with links to React app views",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T22:10:07.935960-05:00",
+      "updated_at": "2025-12-09T22:10:07.935960-05:00",
+      "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 122,
+      "node_type": "observation",
+      "title": "Runtime detection of localhost vs GitHub Pages determines data source - /api/graph for local, ./graph-data.json for static",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T22:10:15.295988-05:00",
+      "updated_at": "2025-12-09T22:10:15.295988-05:00",
+      "metadata_json": "{\"confidence\":95}"
+    },
+    {
+      "id": 123,
+      "node_type": "outcome",
+      "title": "Cleaned docs/ - removed all audio-related files and old spelunk-*.html, React app replaces all views",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T22:10:15.422037-05:00",
+      "updated_at": "2025-12-09T22:10:15.422037-05:00",
+      "metadata_json": "{\"confidence\":95}"
+    },
+    {
+      "id": 124,
+      "node_type": "goal",
+      "title": "Publish deciduous to crates.io",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T22:13:22.564103-05:00",
+      "updated_at": "2025-12-09T22:13:22.564103-05:00",
+      "metadata_json": "{\"confidence\":95}"
+    },
+    {
+      "id": 125,
+      "node_type": "action",
+      "title": "Committing all changes and publishing to crates.io",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T22:15:10.871335-05:00",
+      "updated_at": "2025-12-09T22:15:10.871335-05:00",
+      "metadata_json": "{\"confidence\":90}"
     }
   ],
   "edges": [
@@ -1683,6 +1863,141 @@
       "weight": 1.0,
       "rationale": "Build verification",
       "created_at": "2025-12-09T17:47:51.750215-05:00"
+    },
+    {
+      "id": 69,
+      "from_node_id": 107,
+      "to_node_id": 108,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Phase A complete, creating PR",
+      "created_at": "2025-12-09T17:54:51.707809-05:00"
+    },
+    {
+      "id": 70,
+      "from_node_id": 108,
+      "to_node_id": 109,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "PR created successfully",
+      "created_at": "2025-12-09T17:56:36.095892-05:00"
+    },
+    {
+      "id": 71,
+      "from_node_id": 109,
+      "to_node_id": 110,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Moving to Phase B after PR created",
+      "created_at": "2025-12-09T17:56:55.235673-05:00"
+    },
+    {
+      "id": 72,
+      "from_node_id": 110,
+      "to_node_id": 111,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Fork complete with history preserved",
+      "created_at": "2025-12-09T17:57:28.378747-05:00"
+    },
+    {
+      "id": 73,
+      "from_node_id": 111,
+      "to_node_id": 112,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Phase B complete, starting Phase C",
+      "created_at": "2025-12-09T18:02:26.826801-05:00"
+    },
+    {
+      "id": 74,
+      "from_node_id": 113,
+      "to_node_id": 114,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Discovery while working",
+      "created_at": "2025-12-09T18:09:13.052745-05:00"
+    },
+    {
+      "id": 75,
+      "from_node_id": 113,
+      "to_node_id": 115,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Phase C completed successfully",
+      "created_at": "2025-12-09T18:14:13.170835-05:00"
+    },
+    {
+      "id": 76,
+      "from_node_id": 116,
+      "to_node_id": 117,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Goal requires build strategy decision",
+      "created_at": "2025-12-09T22:10:28.412304-05:00"
+    },
+    {
+      "id": 77,
+      "from_node_id": 117,
+      "to_node_id": 118,
+      "edge_type": "chosen",
+      "weight": 1.0,
+      "rationale": "Option A: embedded build",
+      "created_at": "2025-12-09T22:10:28.562810-05:00"
+    },
+    {
+      "id": 78,
+      "from_node_id": 117,
+      "to_node_id": 119,
+      "edge_type": "chosen",
+      "weight": 1.0,
+      "rationale": "Option B: pages build",
+      "created_at": "2025-12-09T22:10:28.737939-05:00"
+    },
+    {
+      "id": 79,
+      "from_node_id": 118,
+      "to_node_id": 120,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Both builds need HashRouter",
+      "created_at": "2025-12-09T22:10:28.923766-05:00"
+    },
+    {
+      "id": 80,
+      "from_node_id": 119,
+      "to_node_id": 121,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Pages build needs landing page",
+      "created_at": "2025-12-09T22:10:29.081709-05:00"
+    },
+    {
+      "id": 81,
+      "from_node_id": 120,
+      "to_node_id": 122,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Observation about runtime detection",
+      "created_at": "2025-12-09T22:10:29.233840-05:00"
+    },
+    {
+      "id": 82,
+      "from_node_id": 121,
+      "to_node_id": 123,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Cleanup completed",
+      "created_at": "2025-12-09T22:10:29.434230-05:00"
+    },
+    {
+      "id": 83,
+      "from_node_id": 124,
+      "to_node_id": 125,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Publishing requires commit and cargo publish",
+      "created_at": "2025-12-09T22:15:15.796031-05:00"
     }
   ]
 }

@@ -60,7 +60,12 @@ export function useGraphData(options: UseGraphDataOptions = {}): UseGraphDataRes
       if (!response.ok) {
         throw new Error(`Failed to fetch graph: ${response.status} ${response.statusText}`);
       }
-      const data = await response.json() as GraphData;
+      const json = await response.json();
+      // Handle both API response {ok, data, error} and direct GraphData format
+      const data: GraphData = json.data ?? json;
+      if (json.ok === false && json.error) {
+        throw new Error(json.error);
+      }
       setGraphData(data);
       setLastUpdated(new Date());
       setError(null);
