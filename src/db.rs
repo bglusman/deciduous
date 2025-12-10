@@ -322,6 +322,7 @@ pub enum DbError {
     Connection(String),
     Query(diesel::result::Error),
     Pool(diesel::r2d2::Error),
+    Validation(String),
 }
 
 impl std::fmt::Display for DbError {
@@ -330,6 +331,7 @@ impl std::fmt::Display for DbError {
             DbError::Connection(msg) => write!(f, "Connection error: {}", msg),
             DbError::Query(e) => write!(f, "Query error: {}", e),
             DbError::Pool(e) => write!(f, "Pool error: {}", e),
+            DbError::Validation(msg) => write!(f, "{}", msg),
         }
     }
 }
@@ -570,6 +572,25 @@ impl Database {
     /// Create an edge between nodes
     pub fn create_edge(&self, from_id: i32, to_id: i32, edge_type: &str, rationale: Option<&str>) -> Result<i32> {
         let mut conn = self.get_conn()?;
+
+        // Validate both nodes exist before creating edge
+        let from_exists: bool = decision_nodes::table
+            .filter(decision_nodes::id.eq(from_id))
+            .first::<DecisionNode>(&mut conn)
+            .is_ok();
+        let to_exists: bool = decision_nodes::table
+            .filter(decision_nodes::id.eq(to_id))
+            .first::<DecisionNode>(&mut conn)
+            .is_ok();
+
+        if !from_exists && !to_exists {
+            return Err(DbError::Validation(format!("Both nodes {} and {} do not exist. Run 'deciduous nodes' to see existing nodes.", from_id, to_id)));
+        } else if !from_exists {
+            return Err(DbError::Validation(format!("Source node {} does not exist. Run 'deciduous nodes' to see existing nodes.", from_id)));
+        } else if !to_exists {
+            return Err(DbError::Validation(format!("Target node {} does not exist. Run 'deciduous nodes' to see existing nodes.", to_id)));
+        }
+
         let now = chrono::Local::now().to_rfc3339();
 
         let new_edge = NewDecisionEdge {

@@ -68,6 +68,42 @@ deciduous sync
 ```
 </commands>
 
+## Branch-Based Grouping
+
+<branch_grouping>
+**Nodes are automatically tagged with the current git branch.** This enables filtering by feature/PR.
+
+### How It Works
+- When you create a node, the current git branch is stored automatically
+- Configure which branches are "main" in `.deciduous/config.toml`:
+  ```toml
+  [branch]
+  main_branches = ["main", "master"]  # Branches not treated as feature branches
+  auto_detect = true                    # Auto-detect branch on node creation
+  ```
+- Nodes on feature branches can be filtered and grouped
+
+### CLI Commands
+```bash
+# Filter nodes by branch
+deciduous nodes --branch main
+deciduous nodes --branch feature-auth
+deciduous nodes -b my-feature
+
+# Override auto-detection
+deciduous add goal "Feature work" -b feature-x  # Force specific branch
+deciduous add goal "Universal note" --no-branch  # No branch tag
+```
+
+### Web UI
+The graph viewer has a branch dropdown filter in the stats bar.
+
+### When to Use
+- **Feature work**: Nodes auto-grouped by branch
+- **PR context**: Filter to see decisions for specific PR
+- **Cross-cutting**: Use `--no-branch` for universal notes
+</branch_grouping>
+
 ## Edge Types
 
 <edge_types>

@@ -17,6 +17,9 @@ alwaysApply: false
 # See all decisions
 deciduous nodes
 
+# Filter by current branch (useful for feature work)
+deciduous nodes --branch $(git rev-parse --abbrev-ref HEAD)
+
 # See connections
 deciduous edges
 
@@ -28,6 +31,19 @@ git status
 git log --oneline -10
 ```
 </commands>
+
+## Branch Configuration
+
+<branch_config>
+Check `.deciduous/config.toml` for branch settings:
+```toml
+[branch]
+main_branches = ["main", "master"]  # Which branches are "main"
+auto_detect = true                    # Auto-detect branch on node creation
+```
+
+**Branch-scoped context**: When on feature branches, use `--branch` filter to see only relevant decisions.
+</branch_config>
 
 ## CRITICAL: Audit Graph Integrity
 

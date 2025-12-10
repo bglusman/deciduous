@@ -143,3 +143,34 @@
 - [ ] Hook-aware templates
   - Update `.claude/commands/` and `.windsurf/rules/` to mention pre-commit awareness
   - Instruct LLMs to check for hooks before committing
+
+### Claude Code Hooks Integration
+- [ ] Explore using Claude Code hooks to guarantee workflow behavior
+  - Claude Code supports hooks that run on various events (tool calls, messages, etc.)
+  - Could enforce decision graph logging more reliably than instructions alone
+- [ ] **Pre-tool hooks**: Before file edits
+  - Auto-log `action` node when Claude is about to modify files
+  - Capture which files are being changed
+  - Block edits if no active goal exists in the graph
+- [ ] **Post-tool hooks**: After successful operations
+  - Auto-log `outcome` nodes after code changes succeed
+  - Auto-link outcomes to their parent actions
+  - Trigger `deciduous sync` after significant changes
+- [ ] **Pre-commit hooks**: Before git commits
+  - Verify graph integrity (no orphan outcomes/actions)
+  - Require at least one goal node for the current session
+  - Auto-add commit hash to recent action/outcome nodes
+- [ ] **Session start hooks**: On conversation begin
+  - Auto-run `/context` equivalent
+  - Load graph state and surface pending decisions
+  - Warn if there are disconnected nodes needing attention
+- [ ] **Prompt submit hooks**: When user sends a message
+  - Detect feature requests and auto-create goal nodes
+  - Capture original prompt in node metadata
+- [ ] Hook configuration in `.deciduous/hooks.toml`
+  - Enable/disable specific hooks
+  - Configure strictness (warn vs block)
+  - Custom hook scripts for project-specific needs
+- [ ] Document hook setup in Claude Code settings
+  - Integration guide for `.claude/settings.json`
+  - Example hook configurations for different workflow styles

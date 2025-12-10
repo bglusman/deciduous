@@ -17,6 +17,20 @@ pub enum Editor {
 /// Static HTML viewer for GitHub Pages (embedded at compile time)
 const PAGES_VIEWER_HTML: &str = include_str!("pages_viewer.html");
 
+/// Default configuration file content
+const DEFAULT_CONFIG: &str = r#"# Deciduous Configuration
+# This file controls branch detection and grouping behavior
+
+[branch]
+# Branches considered "main" - nodes on these branches won't trigger feature-branch grouping
+# When working on feature branches, nodes are automatically tagged with the branch name
+main_branches = ["main", "master"]
+
+# Automatically detect and store git branch when creating nodes
+# Set to false to disable branch tracking entirely
+auto_detect = true
+"#;
+
 /// GitHub Pages deploy workflow (deploys to gh-pages branch, safe for project repos)
 const DEPLOY_PAGES_WORKFLOW: &str = r#"name: Deploy Decision Graph to Pages
 
@@ -93,10 +107,32 @@ Based on $ARGUMENTS:
 - `--no-branch` - Skip branch auto-detection
 - `--commit <hash>` - Link to a git commit
 
-### Branch Filtering
-- `deciduous nodes --branch main` - Show only nodes from main branch
-- `deciduous nodes --branch feature-x` - Filter by any branch
-- Web UI has branch dropdown filter in stats bar
+## Branch-Based Grouping
+
+**Nodes are automatically tagged with the current git branch.**
+
+### Configuration
+
+Edit `.deciduous/config.toml`:
+```toml
+[branch]
+main_branches = ["main", "master"]  # Branches not treated as feature branches
+auto_detect = true                    # Auto-detect branch on node creation
+```
+
+### CLI Commands
+```bash
+# Filter nodes by branch
+deciduous nodes --branch main
+deciduous nodes -b feature-auth
+
+# Override auto-detection
+deciduous add goal "Feature work" -b feature-x  # Force specific branch
+deciduous add goal "Universal" --no-branch       # No branch tag
+```
+
+### Web UI
+Branch dropdown filter in stats bar filters all views.
 
 ### Create Edges
 - `link <from> <to> [reason]` -> `deciduous link <from> <to> -r "<reason>"`
@@ -177,12 +213,17 @@ argument-hint: [focus-area]
 # See all decisions (look for recent ones and pending status)
 deciduous nodes
 
+# Filter by current branch (useful for feature work)
+deciduous nodes --branch $(git rev-parse --abbrev-ref HEAD)
+
 # See how decisions connect
 deciduous edges
 
 # What commands were recently run?
 deciduous commands
 ```
+
+**Branch-scoped context**: If on a feature branch, filter to see only relevant decisions.
 
 ## Step 2: Check Git State
 
@@ -385,6 +426,19 @@ deciduous sync    # Export for static hosting
 # -p, --prompt "..."   Store the user prompt
 # -f, --files "a.rs,b.rs"   Associate files
 # -b, --branch <name>   Git branch (auto-detected)
+
+# Branch filtering
+deciduous nodes --branch main
+deciduous nodes -b feature-auth
+```
+
+### Branch-Based Grouping
+
+Nodes are auto-tagged with the current git branch. Configure in `.deciduous/config.toml`:
+```toml
+[branch]
+main_branches = ["main", "master"]
+auto_detect = true
 ```
 
 ### Audit Checklist (Before Every Sync)
@@ -477,6 +531,29 @@ deciduous edges
 deciduous sync
 ```
 </commands>
+
+## Branch-Based Grouping
+
+<branch_grouping>
+**Nodes are automatically tagged with the current git branch.**
+
+Configure in `.deciduous/config.toml`:
+```toml
+[branch]
+main_branches = ["main", "master"]
+auto_detect = true
+```
+
+### CLI Commands
+```bash
+deciduous nodes --branch main       # Filter by branch
+deciduous add goal "X" -b feature-x # Override branch
+deciduous add goal "X" --no-branch  # No branch tag
+```
+
+### Web UI
+Branch dropdown filter in stats bar filters all views.
+</branch_grouping>
 
 ## Edge Types
 
@@ -655,6 +732,19 @@ deciduous sync    # Export for static hosting
 # -p, --prompt "..."   Store the user prompt
 # -f, --files "a.rs,b.rs"   Associate files
 # -b, --branch <name>   Git branch (auto-detected)
+
+# Branch filtering
+deciduous nodes --branch main
+deciduous nodes -b feature-auth
+```
+
+### Branch-Based Grouping
+
+Nodes are auto-tagged with the current git branch. Configure in `.deciduous/config.toml`:
+```toml
+[branch]
+main_branches = ["main", "master"]
+auto_detect = true
 ```
 
 ### Audit Checklist (Before Every Sync)
@@ -691,6 +781,10 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
     // 1. Create .deciduous directory (shared between all editors)
     let deciduous_dir = cwd.join(".deciduous");
     create_dir_if_missing(&deciduous_dir)?;
+
+    // 1b. Create default config.toml if it doesn't exist
+    let config_path = deciduous_dir.join("config.toml");
+    write_file_if_missing(&config_path, DEFAULT_CONFIG, ".deciduous/config.toml")?;
 
     // 2. Initialize database by opening it (creates tables)
     let db_path = deciduous_dir.join("deciduous.db");
@@ -841,6 +935,147 @@ fn write_file_if_missing(path: &Path, content: &str, display_name: &str) -> Resu
             .map_err(|e| format!("Could not write {}: {}", display_name, e))?;
         println!("   {} {}", "Creating".green(), display_name);
     }
+    Ok(())
+}
+
+fn write_file_overwrite(path: &Path, content: &str, display_name: &str) -> Result<(), String> {
+    fs::write(path, content)
+        .map_err(|e| format!("Could not write {}: {}", display_name, e))?;
+    println!("   {} {}", "Updated".green(), display_name);
+    Ok(())
+}
+
+fn replace_config_md_section(path: &Path, section_content: &str, file_name: &str) -> Result<(), String> {
+    // Look for either variant of our section header
+    let markers = [
+        "## Decision Graph Workflow",
+        "## ⚠️ MANDATORY: Decision Graph Workflow",
+    ];
+    // Our section ends when we hit another ## heading or end of file
+    let section_end_pattern = "\n## ";
+
+    if path.exists() {
+        let existing = fs::read_to_string(path)
+            .map_err(|e| format!("Could not read {}: {}", file_name, e))?;
+
+        // Find the start of our section (try each marker)
+        let start_idx = markers.iter()
+            .filter_map(|m| existing.find(m))
+            .min();
+
+        if let Some(start) = start_idx {
+            // Find the end of our section (next ## heading after our section starts)
+            let after_marker = start + 5; // Skip past "## " at minimum
+            let end_idx = existing[after_marker..]
+                .find(section_end_pattern)
+                .map(|i| after_marker + i + 1) // +1 to keep the newline before next section
+                .unwrap_or(existing.len()); // If no next section, replace to end
+
+            // Rebuild the file: before our section + new section + after our section
+            let before = &existing[..start];
+            let after = &existing[end_idx..];
+
+            let new_content = if after.is_empty() {
+                format!("{}{}", before, section_content.trim_start())
+            } else {
+                format!("{}{}\n{}", before, section_content.trim(), after.trim_start())
+            };
+
+            fs::write(path, new_content)
+                .map_err(|e| format!("Could not write {}: {}", file_name, e))?;
+            println!("   {} {} (section replaced)", "Updated".green(), file_name);
+        } else {
+            // No existing section, append
+            let mut file = fs::OpenOptions::new()
+                .append(true)
+                .open(path)
+                .map_err(|e| format!("Could not open {} for append: {}", file_name, e))?;
+            use std::io::Write;
+            writeln!(file, "\n{}", section_content.trim())
+                .map_err(|e| format!("Could not append to {}: {}", file_name, e))?;
+            println!("   {} {} (section added)", "Updated".green(), file_name);
+        }
+    } else {
+        // File doesn't exist, create it
+        fs::write(path, section_content.trim())
+            .map_err(|e| format!("Could not create {}: {}", file_name, e))?;
+        println!("   {} {}", "Creating".green(), file_name);
+    }
+    Ok(())
+}
+
+/// Update tooling files to the latest version (overwrites existing)
+pub fn update_tooling(editor: Editor) -> Result<(), String> {
+    let cwd = std::env::current_dir()
+        .map_err(|e| format!("Could not get current directory: {}", e))?;
+
+    let editor_name = match editor {
+        Editor::Claude => "Claude Code",
+        Editor::Windsurf => "Windsurf",
+    };
+
+    println!("\n{}", format!("Updating Deciduous tooling for {}...", editor_name).cyan().bold());
+    println!("   Directory: {}\n", cwd.display());
+
+    // Update config.toml (only if .deciduous exists)
+    let deciduous_dir = cwd.join(".deciduous");
+    if deciduous_dir.exists() {
+        let config_path = deciduous_dir.join("config.toml");
+        write_file_overwrite(&config_path, DEFAULT_CONFIG, ".deciduous/config.toml")?;
+    } else {
+        println!("   {} .deciduous/ not found - run 'deciduous init' first", "Warning:".yellow());
+    }
+
+    match editor {
+        Editor::Claude => {
+            // Create .claude/commands directory if needed
+            let claude_dir = cwd.join(".claude").join("commands");
+            create_dir_if_missing(&claude_dir)?;
+
+            // Overwrite decision.md slash command
+            let decision_path = claude_dir.join("decision.md");
+            write_file_overwrite(&decision_path, DECISION_MD, ".claude/commands/decision.md")?;
+
+            // Overwrite context.md slash command
+            let context_path = claude_dir.join("context.md");
+            write_file_overwrite(&context_path, CONTEXT_MD, ".claude/commands/context.md")?;
+
+            // Update CLAUDE.md section
+            let claude_md_path = cwd.join("CLAUDE.md");
+            replace_config_md_section(&claude_md_path, CLAUDE_MD_SECTION, "CLAUDE.md")?;
+        }
+        Editor::Windsurf => {
+            // Create .windsurf directories if needed
+            let windsurf_base = cwd.join(".windsurf");
+            create_dir_if_missing(&windsurf_base)?;
+            let windsurf_rules = windsurf_base.join("rules");
+            create_dir_if_missing(&windsurf_rules)?;
+
+            // Overwrite deciduous.md rule
+            let deciduous_rule_path = windsurf_rules.join("deciduous.md");
+            write_file_overwrite(&deciduous_rule_path, WINDSURF_DECIDUOUS_RULE, ".windsurf/rules/deciduous.md")?;
+
+            // Overwrite context.md rule
+            let context_path = windsurf_rules.join("context.md");
+            write_file_overwrite(&context_path, WINDSURF_CONTEXT_RULE, ".windsurf/rules/context.md")?;
+
+            // Overwrite memories.md
+            let memories_path = windsurf_base.join("memories.md");
+            write_file_overwrite(&memories_path, WINDSURF_MEMORIES, ".windsurf/memories.md")?;
+
+            // Update AGENTS.md section
+            let agents_md_path = cwd.join("AGENTS.md");
+            replace_config_md_section(&agents_md_path, AGENTS_MD_SECTION, "AGENTS.md")?;
+        }
+    }
+
+    println!("\n{}", format!("Tooling updated for {}!", editor_name).green().bold());
+    println!("\nUpdated files contain the latest:");
+    println!("  - Branch-based grouping with config.toml");
+    println!("  - Graph integrity auditing workflows");
+    println!("  - Improved error messages and documentation");
+    println!();
+
     Ok(())
 }
 

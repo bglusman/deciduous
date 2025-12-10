@@ -107,8 +107,13 @@ deciduous link 1 2 --edge-type chosen -r "Selected this approach"
 
 # View graph
 deciduous nodes           # List all nodes
+deciduous nodes -b main   # Filter by branch
 deciduous edges           # List all edges
 deciduous graph           # Full graph as JSON
+
+# Branch-based grouping (auto-detects git branch)
+deciduous add goal "Feature work" -b feature-x  # Override branch
+deciduous add goal "Universal" --no-branch       # No branch tag
 
 # Sync and export
 deciduous sync            # Export to .deciduous/web/graph-data.json
@@ -145,6 +150,35 @@ make writeup TITLE="PR Title" NODES=1-11
 - **50-69**: Moderate confidence, some unknowns
 - **30-49**: Experimental, might change
 - **0-29**: Speculative, likely to revisit
+
+### Branch-Based Grouping
+
+**Nodes are automatically tagged with the current git branch.** This enables filtering by feature/PR.
+
+**Configuration** (`.deciduous/config.toml`):
+```toml
+[branch]
+main_branches = ["main", "master"]  # Branches not treated as "feature branches"
+auto_detect = true                    # Auto-detect branch on node creation
+```
+
+**CLI Usage:**
+```bash
+# Filter nodes by branch
+deciduous nodes --branch main
+deciduous nodes -b feature-auth
+
+# Override auto-detection when creating nodes
+deciduous add goal "Feature work" -b feature-x  # Force specific branch
+deciduous add goal "Universal note" --no-branch  # No branch tag
+```
+
+**Web UI:** Branch dropdown filter in stats bar filters all views.
+
+**When to Use:**
+- Feature work: Nodes auto-grouped by branch
+- PR context: Filter to see decisions for specific PR
+- Cross-cutting: Use `--no-branch` for universal notes
 
 ### Why This Matters
 

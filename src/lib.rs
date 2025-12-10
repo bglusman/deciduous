@@ -38,12 +38,14 @@
 //! println!("Nodes: {}, Edges: {}", graph.nodes.len(), graph.edges.len());
 //! ```
 
+pub mod config;
 pub mod db;
 pub mod export;
 pub mod init;
 pub mod schema;
 pub mod serve;
 
+pub use config::Config;
 pub use db::{
     CommandLog, Database, DbRecord, DbSummary, DecisionEdge, DecisionGraph, DecisionNode,
     CURRENT_SCHEMA, get_current_git_branch,

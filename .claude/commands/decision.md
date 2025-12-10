@@ -45,10 +45,42 @@ Based on $ARGUMENTS:
 - `--no-branch` - Skip branch auto-detection
 - `--commit <hash>` - Link to a git commit
 
-### Branch Filtering
-- `deciduous nodes --branch main` - Show only nodes from main branch
-- `deciduous nodes --branch feature-x` - Show only nodes from feature-x branch
-- Web UI has branch dropdown filter in stats bar
+## Branch-Based Grouping
+
+**Nodes are automatically tagged with the current git branch.** This enables filtering by feature/PR.
+
+### How It Works
+- When you create a node, the current git branch is stored in `metadata_json`
+- Configure which branches are "main" in `.deciduous/config.toml`:
+  ```toml
+  [branch]
+  main_branches = ["main", "master"]  # Branches not treated as "feature branches"
+  auto_detect = true                    # Auto-detect branch on node creation
+  ```
+- Nodes on feature branches (anything not in `main_branches`) can be grouped/filtered
+
+### CLI Filtering
+```bash
+# Show only nodes from specific branch
+deciduous nodes --branch main
+deciduous nodes --branch feature-auth
+deciduous nodes -b my-feature
+
+# Override auto-detection when creating nodes
+deciduous add goal "Feature work" -b feature-x  # Force specific branch
+deciduous add goal "Universal note" --no-branch  # No branch tag
+```
+
+### Web UI Branch Filter
+The graph viewer shows a branch dropdown in the stats bar:
+- "All branches" shows everything
+- Select a specific branch to filter all views (Chains, Timeline, Graph, DAG)
+
+### When to Use Branch Grouping
+- **Feature work**: Nodes created on `feature-auth` branch auto-grouped
+- **PR context**: Filter to see only decisions for a specific PR
+- **Cross-cutting concerns**: Use `--no-branch` for universal notes
+- **Retrospectives**: Filter by branch to see decision history per feature
 
 ### Create Edges
 - `link <from> <to> [reason]` -> `deciduous link <from> <to> -r "<reason>"`

@@ -14,12 +14,17 @@ argument-hint: [focus-area]
 # See all decisions (look for recent ones and pending status)
 deciduous nodes
 
+# Filter by current branch (useful for feature work)
+deciduous nodes --branch $(git rev-parse --abbrev-ref HEAD)
+
 # See how decisions connect
 deciduous edges
 
 # What commands were recently run?
 deciduous commands
 ```
+
+**Branch-scoped context**: If working on a feature branch, filter nodes to see only decisions relevant to this branch. Main branch nodes are tagged with `[branch: main]`.
 
 ## Step 1.5: Audit Graph Integrity
 
@@ -61,10 +66,20 @@ cat git.log | tail -30
 ## After Gathering Context, Report:
 
 1. **Current branch** and pending changes
-2. **Recent decisions** (especially pending/active ones)
-3. **Last actions** from git log and command log
-4. **Open questions** or unresolved observations
-5. **Suggested next steps**
+2. **Branch-specific decisions** (filter by branch if on feature branch)
+3. **Recent decisions** (especially pending/active ones)
+4. **Last actions** from git log and command log
+5. **Open questions** or unresolved observations
+6. **Suggested next steps**
+
+### Branch Configuration
+
+Check `.deciduous/config.toml` for branch settings:
+```toml
+[branch]
+main_branches = ["main", "master"]  # Which branches are "main"
+auto_detect = true                    # Auto-detect branch on node creation
+```
 
 ---
 

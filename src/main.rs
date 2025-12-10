@@ -26,6 +26,17 @@ enum Command {
         windsurf: bool,
     },
 
+    /// Update tooling files to latest version (overwrites existing)
+    Update {
+        /// Update Claude Code files (.claude/commands/, CLAUDE.md)
+        #[arg(long, group = "editor")]
+        claude: bool,
+
+        /// Update Windsurf files (.windsurf/rules/, AGENTS.md)
+        #[arg(long, group = "editor")]
+        windsurf: bool,
+    },
+
     /// Add a new node to the decision graph
     Add {
         /// Node type: goal, decision, option, action, outcome, observation
@@ -220,6 +231,22 @@ fn main() {
         return;
     }
 
+    // Handle update separately - it doesn't need an existing database
+    if let Command::Update { claude: _, windsurf } = args.command {
+        // Determine editor type: default to Claude if neither specified
+        let editor = if windsurf {
+            deciduous::init::Editor::Windsurf
+        } else {
+            deciduous::init::Editor::Claude
+        };
+
+        if let Err(e) = deciduous::init::update_tooling(editor) {
+            eprintln!("{} {}", "Error:".red(), e);
+            std::process::exit(1);
+        }
+        return;
+    }
+
     let db = match Database::open() {
         Ok(db) => db,
         Err(e) => {
@@ -230,6 +257,7 @@ fn main() {
 
     match args.command {
         Command::Init { .. } => unreachable!(), // Handled above
+        Command::Update { .. } => unreachable!(), // Handled above
         Command::Add { node_type, title, description, confidence, commit, prompt, files, branch, no_branch } => {
             // Auto-detect branch if not specified and not disabled
             let effective_branch = if no_branch {

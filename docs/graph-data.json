@@ -1629,6 +1629,56 @@
       "created_at": "2025-12-10T15:53:35.160855-05:00",
       "updated_at": "2025-12-10T15:53:35.160855-05:00",
       "metadata_json": "{\"branch\":\"main\",\"confidence\":90}"
+    },
+    {
+      "id": 164,
+      "node_type": "outcome",
+      "title": "Released v0.5.2 with graph integrity auditing",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T15:55:29.588216-05:00",
+      "updated_at": "2025-12-10T15:55:29.588216-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
+    },
+    {
+      "id": 165,
+      "node_type": "goal",
+      "title": "Add branch config and documentation, fix foreign key error",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T16:12:22.191883-05:00",
+      "updated_at": "2025-12-10T16:12:22.191883-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90,\"prompt\":\"User wants branch docs in all tooling, configurable main branch name, and fix FK constraint failed on link\"}"
+    },
+    {
+      "id": 166,
+      "node_type": "outcome",
+      "title": "Added config file, branch docs, and FK error fix",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T16:22:12.000580-05:00",
+      "updated_at": "2025-12-10T16:22:12.000580-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
+    },
+    {
+      "id": 167,
+      "node_type": "goal",
+      "title": "Add deciduous update command to sync tooling files to latest",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T16:26:41.496415-05:00",
+      "updated_at": "2025-12-10T16:26:41.496415-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90,\"prompt\":\"User wants CLI command to update .claude/commands, .windsurf/rules, CLAUDE.md, AGENTS.md to latest versions\"}"
+    },
+    {
+      "id": 168,
+      "node_type": "outcome",
+      "title": "Implemented deciduous update command",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T16:30:05.494525-05:00",
+      "updated_at": "2025-12-10T16:30:05.494525-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
     }
   ],
   "edges": [
@@ -2594,6 +2644,33 @@
       "weight": 1.0,
       "rationale": "Release action follows from auditing goal",
       "created_at": "2025-12-10T15:53:41.462368-05:00"
+    },
+    {
+      "id": 108,
+      "from_node_id": 163,
+      "to_node_id": 164,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Release action completed successfully",
+      "created_at": "2025-12-10T15:55:36.183545-05:00"
+    },
+    {
+      "id": 109,
+      "from_node_id": 165,
+      "to_node_id": 166,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Completed config file, branch documentation, and FK error fix",
+      "created_at": "2025-12-10T16:22:18.961684-05:00"
+    },
+    {
+      "id": 110,
+      "from_node_id": 167,
+      "to_node_id": 168,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Update command implemented and tested",
+      "created_at": "2025-12-10T16:30:11.276439-05:00"
     }
   ]
 }
