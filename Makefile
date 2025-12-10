@@ -1,4 +1,4 @@
-.PHONY: build release debug test test-verbose clean install uninstall serve analyze gen-test-files fmt lint check help db-nodes db-edges db-graph db-commands db-backup db-view goal decision option action outcome obs link status sync-graph deploy web-install web-dev web-build web-typecheck web-test web-preview
+.PHONY: build release debug test test-verbose clean install uninstall serve analyze gen-test-files fmt lint check help db-nodes db-edges db-graph db-commands db-backup db-view goal decision option action outcome obs link status sync-graph deploy publish publish-dry release-patch web-install web-dev web-build web-typecheck web-test web-preview
 
 # Default target
 all: release
@@ -107,74 +107,74 @@ bench:
 
 # ============ Decision Graph ============
 
-BINARY := ./target/release/losselot
+BINARY := ./target/release/deciduous
 
 # View commands
 db-nodes: release
-	$(BINARY) db nodes
+	$(BINARY) nodes
 
 db-edges: release
-	$(BINARY) db edges
+	$(BINARY) edges
 
 db-graph: release
-	$(BINARY) db graph
+	$(BINARY) graph
 
 db-commands: release
-	$(BINARY) db commands
+	$(BINARY) commands
 
 db-backup: release
-	$(BINARY) db backup
+	$(BINARY) backup
 
 db-view: release
 	@echo "Starting server and opening graph viewer..."
-	$(BINARY) serve . --port $(or $(PORT),3001) &
+	$(BINARY) serve --port $(or $(PORT),3001) &
 	@sleep 1
-	open http://localhost:$(or $(PORT),3001)/graph
+	open http://localhost:$(or $(PORT),3001)
 
 # Create nodes (optional C=confidence 0-100)
 goal: release
 	@test -n "$(T)" || (echo "Usage: make goal T='Your goal title' [C=80]" && exit 1)
-	$(BINARY) db add-node -t goal "$(T)" $(if $(C),-c $(C),)
+	$(BINARY) add goal "$(T)" $(if $(C),-c $(C),)
 
 decision: release
 	@test -n "$(T)" || (echo "Usage: make decision T='Your decision title' [C=80]" && exit 1)
-	$(BINARY) db add-node -t decision "$(T)" $(if $(C),-c $(C),)
+	$(BINARY) add decision "$(T)" $(if $(C),-c $(C),)
 
 option: release
 	@test -n "$(T)" || (echo "Usage: make option T='Your option title' [C=80]" && exit 1)
-	$(BINARY) db add-node -t option "$(T)" $(if $(C),-c $(C),)
+	$(BINARY) add option "$(T)" $(if $(C),-c $(C),)
 
 action: release
 	@test -n "$(T)" || (echo "Usage: make action T='Your action title' [C=80]" && exit 1)
-	$(BINARY) db add-node -t action "$(T)" $(if $(C),-c $(C),)
+	$(BINARY) add action "$(T)" $(if $(C),-c $(C),)
 
 outcome: release
 	@test -n "$(T)" || (echo "Usage: make outcome T='Your outcome title' [C=80]" && exit 1)
-	$(BINARY) db add-node -t outcome "$(T)" $(if $(C),-c $(C),)
+	$(BINARY) add outcome "$(T)" $(if $(C),-c $(C),)
 
 obs: release
 	@test -n "$(T)" || (echo "Usage: make obs T='Your observation' [C=80]" && exit 1)
-	$(BINARY) db add-node -t observation "$(T)" $(if $(C),-c $(C),)
+	$(BINARY) add observation "$(T)" $(if $(C),-c $(C),)
 
 # Create edges
 link: release
 	@test -n "$(FROM)" || (echo "Usage: make link FROM=1 TO=2 [TYPE=leads_to] [REASON='why']" && exit 1)
 	@test -n "$(TO)" || (echo "Usage: make link FROM=1 TO=2 [TYPE=leads_to] [REASON='why']" && exit 1)
 ifdef REASON
-	$(BINARY) db add-edge $(FROM) $(TO) -t $(or $(TYPE),leads_to) -r "$(REASON)"
+	$(BINARY) link $(FROM) $(TO) -t $(or $(TYPE),leads_to) -r "$(REASON)"
 else
-	$(BINARY) db add-edge $(FROM) $(TO) -t $(or $(TYPE),leads_to)
+	$(BINARY) link $(FROM) $(TO) -t $(or $(TYPE),leads_to)
 endif
 
 # Update status
 status: release
 	@test -n "$(ID)" || (echo "Usage: make status ID=1 S=completed" && exit 1)
 	@test -n "$(S)" || (echo "Usage: make status ID=1 S=completed (pending|active|completed|rejected)" && exit 1)
-	$(BINARY) db status $(ID) $(S)
+	$(BINARY) status $(ID) $(S)
 
 # Help
 help:
-	@echo "Losselot - Audio Forensics Tool"
+	@echo "Deciduous - Decision Graph Tooling"
 	@echo ""
 	@echo "Build:"
 	@echo "  make              Build release binary"
@@ -243,9 +243,12 @@ help:
 	@echo "  make link FROM=1 TO=2 TYPE=chosen REASON='why'"
 	@echo "  make status ID=1 S=completed    Update node status"
 	@echo ""
-	@echo "Deploy:"
-	@echo "  make sync-graph   Export decision graph to docs/demo/graph-data.json"
-	@echo "  make deploy       Sync graph and push to main (triggers Pages build)"
+	@echo "Deploy & Publish:"
+	@echo "  make sync-graph    Export decision graph to docs/demo/graph-data.json"
+	@echo "  make deploy        Sync graph and push to main (triggers Pages build)"
+	@echo "  make publish       Publish to crates.io (run tests first)"
+	@echo "  make publish-dry   Dry-run publish to verify package"
+	@echo "  make release-patch Bump patch version and publish"
 	@echo ""
 	@echo "Web Viewer (React + TypeScript + Vite):"
 	@echo "  make web          Sync graph data and start dev server"
@@ -256,19 +259,39 @@ help:
 	@echo "  make web-preview  Preview production build"
 	@echo "  make web-sync     Sync graph data to web/public/"
 
-# ============ Deploy ============
+# ============ Deploy & Publish ============
 
 # Export decision graph to docs for GitHub Pages
 sync-graph: release
 	@echo "Exporting decision graph to docs/demo/graph-data.json..."
-	$(BINARY) db graph > docs/demo/graph-data.json
-	@echo "Graph exported: $$($(BINARY) db nodes | wc -l | tr -d ' ') nodes"
+	$(BINARY) graph > docs/demo/graph-data.json
+	@echo "Graph exported: $$($(BINARY) nodes | wc -l | tr -d ' ') nodes"
 
 # Sync graph and push - triggers GitHub Pages deployment
 deploy: sync-graph
 	@echo "Decision graph synced. Ready to commit and push."
 	@echo "Files changed:"
 	@git status --short docs/demo/graph-data.json
+
+# Publish to crates.io (bump version in Cargo.toml first)
+publish: test
+	@echo "Publishing to crates.io..."
+	cargo publish
+
+# Dry-run publish to verify package
+publish-dry: test
+	@echo "Dry-run publish to verify package..."
+	cargo publish --dry-run
+
+# Bump patch version and publish
+release-patch:
+	@echo "Bumping patch version..."
+	@OLD_VERSION=$$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\([^"]*\)"/\1/'); \
+	NEW_VERSION=$$(echo $$OLD_VERSION | awk -F. '{print $$1"."$$2"."$$3+1}'); \
+	sed -i '' "s/version = \"$$OLD_VERSION\"/version = \"$$NEW_VERSION\"/" Cargo.toml; \
+	echo "Version bumped: $$OLD_VERSION -> $$NEW_VERSION"; \
+	git add Cargo.toml && git commit -m "Bump version to $$NEW_VERSION"; \
+	cargo publish
 
 # ============ Web Viewer (React + TypeScript + Vite) ============
 

@@ -1249,6 +1249,26 @@
       "created_at": "2025-12-09T22:15:10.871335-05:00",
       "updated_at": "2025-12-09T22:15:10.871335-05:00",
       "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 126,
+      "node_type": "observation",
+      "title": "crates.io requires verified email - package ready but blocked on email verification",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T22:17:13.694972-05:00",
+      "updated_at": "2025-12-09T22:17:13.694972-05:00",
+      "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 127,
+      "node_type": "outcome",
+      "title": "Published deciduous v0.1.0 to crates.io - cargo install deciduous now works",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T22:20:47.519634-05:00",
+      "updated_at": "2025-12-09T22:20:47.519634-05:00",
+      "metadata_json": "{\"confidence\":100}"
     }
   ],
   "edges": [
@@ -1998,6 +2018,15 @@
       "weight": 1.0,
       "rationale": "Publishing requires commit and cargo publish",
       "created_at": "2025-12-09T22:15:15.796031-05:00"
+    },
+    {
+      "id": 84,
+      "from_node_id": 125,
+      "to_node_id": 127,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Publishing completed successfully",
+      "created_at": "2025-12-09T22:20:47.651216-05:00"
     }
   ]
 }
