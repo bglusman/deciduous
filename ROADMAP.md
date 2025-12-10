@@ -174,3 +174,39 @@
 - [ ] Document hook setup in Claude Code settings
   - Integration guide for `.claude/settings.json`
   - Example hook configurations for different workflow styles
+
+### Git.log File Reliability
+- [ ] Investigate why git.log file isn't always being created/updated
+  - User reported missing git.log during session
+  - This file should always exist and track all git commands run
+- [ ] Ensure git.log is created on `deciduous init`
+- [ ] Add git.log writing to all git-related operations
+- [ ] Consider moving git.log into `.deciduous/` directory for better organization
+- [ ] Add `deciduous log` command to view git.log contents
+- [ ] Document git.log purpose and location in tooling files
+
+### DuckDB for OLAP Analytics
+- [ ] Add DuckDB as optional analytical backend for decision graph queries
+  - SQLite is great for OLTP (single-project, real-time logging)
+  - DuckDB excels at OLAP (cross-project analytics, time-series queries, aggregations)
+- [ ] Use cases for analytical queries:
+  - **Cross-project patterns**: "What decision patterns lead to successful outcomes across all my projects?"
+  - **Time-series analysis**: "How has my decision-making evolved over the past 6 months?"
+  - **Confidence calibration**: "Are my high-confidence decisions actually more successful?"
+  - **Path analysis**: "What's the average depth of decision trees that lead to good outcomes?"
+  - **Bottleneck detection**: "Which decision types take longest to resolve?"
+- [ ] Implementation ideas:
+  - Export SQLite graphs to Parquet files for DuckDB ingestion
+  - `deciduous export --parquet` for analytical snapshots
+  - `deciduous analytics` subcommand for running OLAP queries
+  - Optional: federated queries across multiple project databases
+- [ ] Potential analytical views:
+  - Decision funnel analysis (goal → decision → action → outcome conversion)
+  - Confidence vs outcome correlation matrix
+  - Branch/feature complexity metrics
+  - Session productivity heatmaps
+  - Node type distribution over time
+- [ ] Visualization integration:
+  - Export to formats compatible with BI tools (Metabase, Superset, etc.)
+  - Built-in charts in TUI or web viewer
+  - `deciduous report` to generate analytical summaries
