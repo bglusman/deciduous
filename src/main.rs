@@ -1,7 +1,7 @@
 use chrono::Local;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
-use deciduous::{Database, DotConfig, MermaidConfig, WriteupConfig, graph_to_dot, graph_to_mermaid, generate_pr_writeup, filter_graph_by_ids, parse_node_range};
+use deciduous::{Database, DotConfig, WriteupConfig, graph_to_dot, generate_pr_writeup, filter_graph_by_ids, parse_node_range};
 use std::path::PathBuf;
 use std::process::Command as ProcessCommand;
 
@@ -127,33 +127,6 @@ enum Command {
         /// Graph direction: TB (top-bottom) or LR (left-right)
         #[arg(long, default_value = "TB")]
         rankdir: String,
-    },
-
-    /// Export graph as Mermaid format (renders natively on GitHub)
-    Mermaid {
-        /// Output file (default: stdout)
-        #[arg(short, long)]
-        output: Option<PathBuf>,
-
-        /// Root node IDs to filter (comma-separated, traverses children)
-        #[arg(short, long)]
-        roots: Option<String>,
-
-        /// Specific node IDs or ranges (e.g., "1-11" or "1,3,5-10")
-        #[arg(short, long)]
-        nodes: Option<String>,
-
-        /// Graph title
-        #[arg(short, long)]
-        title: Option<String>,
-
-        /// Graph direction: TB, BT, LR, RL
-        #[arg(long, default_value = "TB")]
-        direction: String,
-
-        /// Wrap output in ```mermaid code fence for markdown
-        #[arg(long)]
-        fence: bool,
     },
 
     /// Generate PR writeup from decision graph
@@ -480,56 +453,6 @@ fn main() {
                     } else {
                         // Print to stdout
                         println!("{}", dot);
-                    }
-                }
-                Err(e) => {
-                    eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
-                }
-            }
-        }
-
-        Command::Mermaid { output, roots, nodes, title, direction, fence } => {
-            match db.get_graph() {
-                Ok(graph) => {
-                    // Filter by specific node IDs if provided
-                    let filtered_graph = if let Some(node_spec) = nodes {
-                        let node_ids = parse_node_range(&node_spec);
-                        filter_graph_by_ids(&graph, &node_ids)
-                    } else if let Some(root_spec) = roots {
-                        let root_ids: Vec<i32> = root_spec
-                            .split(',')
-                            .filter_map(|s| s.trim().parse().ok())
-                            .collect();
-                        deciduous::filter_graph_from_roots(&graph, &root_ids)
-                    } else {
-                        graph
-                    };
-
-                    let config = MermaidConfig {
-                        title,
-                        show_confidence: true,
-                        show_ids: true,
-                        direction,
-                    };
-
-                    let mermaid = graph_to_mermaid(&filtered_graph, &config);
-
-                    let output_content = if fence {
-                        format!("```mermaid\n{}```", mermaid)
-                    } else {
-                        mermaid
-                    };
-
-                    if let Some(path) = output {
-                        if let Err(e) = std::fs::write(&path, &output_content) {
-                            eprintln!("{} Writing file: {}", "Error:".red(), e);
-                            std::process::exit(1);
-                        }
-                        println!("{} Mermaid graph to {}", "Exported".green(), path.display());
-                        println!("  {} nodes, {} edges", filtered_graph.nodes.len(), filtered_graph.edges.len());
-                    } else {
-                        println!("{}", output_content);
                     }
                 }
                 Err(e) => {
