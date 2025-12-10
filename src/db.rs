@@ -9,22 +9,33 @@ use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use diesel::sqlite::SqliteConnection;
 use std::path::Path;
 
-/// Default database path - looks for .deciduous/deciduous.db in current dir
+/// Walk up directory tree to find .deciduous folder (like git finds .git)
 /// Can be overridden with DECIDUOUS_DB_PATH env var
 fn get_db_path() -> std::path::PathBuf {
-    // Check env var first
+    // Check env var first - always takes priority
     if let Ok(path) = std::env::var("DECIDUOUS_DB_PATH") {
         return std::path::PathBuf::from(path);
     }
 
-    // Look for .deciduous/deciduous.db in current directory
-    let deciduous_path = std::path::PathBuf::from(".deciduous/deciduous.db");
-    if deciduous_path.exists() || deciduous_path.parent().map(|p| p.exists()).unwrap_or(false) {
-        return deciduous_path;
+    // Walk up directory tree to find .deciduous folder
+    if let Ok(current_dir) = std::env::current_dir() {
+        let mut dir = current_dir.as_path();
+        loop {
+            let deciduous_dir = dir.join(".deciduous");
+            if deciduous_dir.exists() && deciduous_dir.is_dir() {
+                return deciduous_dir.join("deciduous.db");
+            }
+            // Move to parent directory
+            match dir.parent() {
+                Some(parent) => dir = parent,
+                None => break, // Reached filesystem root
+            }
+        }
     }
 
-    // Fallback to deciduous.db in current directory (for backwards compat)
-    std::path::PathBuf::from("deciduous.db")
+    // No .deciduous found - default to current directory
+    // (deciduous init will create it here)
+    std::path::PathBuf::from(".deciduous/deciduous.db")
 }
 
 /// Current schema version for deciduous
