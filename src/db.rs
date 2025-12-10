@@ -9,9 +9,10 @@ use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use diesel::sqlite::SqliteConnection;
 use serde_json::json;
 use std::path::Path;
+use uuid::Uuid;
 
 /// Build metadata JSON from optional fields (confidence, commit, prompt, files, branch)
-fn build_metadata_json(
+pub fn build_metadata_json(
     confidence: Option<u8>,
     commit: Option<&str>,
     prompt: Option<&str>,
@@ -175,6 +176,7 @@ pub struct StoredSchema {
 #[derive(Insertable)]
 #[diesel(table_name = decision_nodes)]
 pub struct NewDecisionNode<'a> {
+    pub change_id: &'a str,
     pub node_type: &'a str,
     pub title: &'a str,
     pub description: Option<&'a str>,
@@ -189,6 +191,7 @@ pub struct NewDecisionNode<'a> {
 #[diesel(table_name = decision_nodes)]
 pub struct DecisionNode {
     pub id: i32,
+    pub change_id: String,
     pub node_type: String,
     pub title: String,
     pub description: Option<String>,
@@ -204,6 +207,8 @@ pub struct DecisionNode {
 pub struct NewDecisionEdge<'a> {
     pub from_node_id: i32,
     pub to_node_id: i32,
+    pub from_change_id: Option<&'a str>,
+    pub to_change_id: Option<&'a str>,
     pub edge_type: &'a str,
     pub weight: Option<f64>,
     pub rationale: Option<&'a str>,
@@ -217,6 +222,8 @@ pub struct DecisionEdge {
     pub id: i32,
     pub from_node_id: i32,
     pub to_node_id: i32,
+    pub from_change_id: Option<String>,
+    pub to_change_id: Option<String>,
     pub edge_type: String,
     pub weight: Option<f64>,
     pub rationale: Option<String>,
@@ -305,6 +312,47 @@ pub struct CommandLog {
 }
 
 // ============================================================================
+// Helper structs for raw SQL queries
+// ============================================================================
+
+/// Helper for PRAGMA table_info queries
+#[derive(QueryableByName, Debug)]
+struct PragmaTableInfo {
+    #[diesel(sql_type = diesel::sql_types::Integer)]
+    #[allow(dead_code)]
+    cid: i32,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    name: String,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    #[allow(dead_code)]
+    r#type: String,
+    #[diesel(sql_type = diesel::sql_types::Integer)]
+    #[allow(dead_code)]
+    notnull: i32,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
+    #[allow(dead_code)]
+    dflt_value: Option<String>,
+    #[diesel(sql_type = diesel::sql_types::Integer)]
+    #[allow(dead_code)]
+    pk: i32,
+}
+
+/// Helper for node ID queries
+#[derive(QueryableByName, Debug)]
+struct NodeIdOnly {
+    #[diesel(sql_type = diesel::sql_types::Integer)]
+    id: i32,
+}
+
+/// Helper for sqlite_master table queries
+#[derive(QueryableByName, Debug)]
+#[allow(dead_code)]
+struct TableInfo {
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    name: String,
+}
+
+// ============================================================================
 // Database Connection
 // ============================================================================
 
@@ -385,8 +433,85 @@ impl Database {
             .map_err(|e| DbError::Connection(e.to_string()))?;
 
         let db = Self { pool };
+        // Auto-migrate FIRST - add change_id columns to existing databases before init_schema creates new tables
+        let _ = db.migrate_add_change_ids_raw();
         db.init_schema()?;
         Ok(db)
+    }
+
+    /// Raw SQL migration that runs before Diesel ORM is used
+    fn migrate_add_change_ids_raw(&self) -> Result<bool> {
+        let mut conn = self.get_conn()?;
+
+        // Check if decision_nodes table exists
+        let tables: Vec<TableInfo> = diesel::sql_query(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='decision_nodes'"
+        )
+        .load::<TableInfo>(&mut conn)
+        .unwrap_or_default();
+
+        if tables.is_empty() {
+            return Ok(false); // Table doesn't exist yet, init_schema will create it
+        }
+
+        // Check if change_id column exists in decision_nodes
+        let columns: Vec<PragmaTableInfo> = diesel::sql_query(
+            "PRAGMA table_info(decision_nodes)"
+        )
+        .load(&mut conn)
+        .unwrap_or_default();
+
+        let has_change_id = columns.iter().any(|c| c.name == "change_id");
+
+        if has_change_id {
+            return Ok(false); // Already migrated
+        }
+
+        // Add change_id column to decision_nodes
+        diesel::sql_query("ALTER TABLE decision_nodes ADD COLUMN change_id TEXT")
+            .execute(&mut conn)?;
+
+        // Backfill change_id with UUIDs for existing nodes
+        let nodes: Vec<NodeIdOnly> = diesel::sql_query(
+            "SELECT id FROM decision_nodes WHERE change_id IS NULL"
+        )
+        .load(&mut conn)
+        .unwrap_or_default();
+
+        for node in nodes {
+            let change_id = Uuid::new_v4().to_string();
+            diesel::sql_query(format!(
+                "UPDATE decision_nodes SET change_id = '{}' WHERE id = {}",
+                change_id, node.id
+            ))
+            .execute(&mut conn)?;
+        }
+
+        // Check if edge columns need migration
+        let edge_columns: Vec<PragmaTableInfo> = diesel::sql_query(
+            "PRAGMA table_info(decision_edges)"
+        )
+        .load(&mut conn)
+        .unwrap_or_default();
+
+        let has_from_change_id = edge_columns.iter().any(|c| c.name == "from_change_id");
+
+        if !has_from_change_id {
+            diesel::sql_query("ALTER TABLE decision_edges ADD COLUMN from_change_id TEXT")
+                .execute(&mut conn)?;
+            diesel::sql_query("ALTER TABLE decision_edges ADD COLUMN to_change_id TEXT")
+                .execute(&mut conn)?;
+
+            // Backfill edge change_ids
+            diesel::sql_query(
+                "UPDATE decision_edges SET
+                    from_change_id = (SELECT change_id FROM decision_nodes WHERE id = decision_edges.from_node_id),
+                    to_change_id = (SELECT change_id FROM decision_nodes WHERE id = decision_edges.to_node_id)"
+            )
+            .execute(&mut conn)?;
+        }
+
+        Ok(true) // Migration performed
     }
 
     fn get_conn(&self) -> Result<DbConn> {
@@ -410,6 +535,7 @@ impl Database {
         diesel::sql_query(r#"
             CREATE TABLE IF NOT EXISTS decision_nodes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                change_id TEXT NOT NULL UNIQUE,
                 node_type TEXT NOT NULL,
                 title TEXT NOT NULL,
                 description TEXT,
@@ -425,6 +551,8 @@ impl Database {
                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                 from_node_id INTEGER NOT NULL,
                 to_node_id INTEGER NOT NULL,
+                from_change_id TEXT,
+                to_change_id TEXT,
                 edge_type TEXT NOT NULL,
                 weight REAL DEFAULT 1.0,
                 rationale TEXT,
@@ -489,8 +617,11 @@ impl Database {
         // Create indexes
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_nodes_type ON decision_nodes(node_type)").execute(&mut conn)?;
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_nodes_status ON decision_nodes(status)").execute(&mut conn)?;
+        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_nodes_change_id ON decision_nodes(change_id)").execute(&mut conn)?;
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_edges_from ON decision_edges(from_node_id)").execute(&mut conn)?;
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_edges_to ON decision_edges(to_node_id)").execute(&mut conn)?;
+        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_edges_from_change ON decision_edges(from_change_id)").execute(&mut conn)?;
+        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_edges_to_change ON decision_edges(to_change_id)").execute(&mut conn)?;
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_command_started_at ON command_log(started_at)").execute(&mut conn)?;
 
         // Register current schema
@@ -517,6 +648,83 @@ impl Database {
         Ok(())
     }
 
+    /// Migrate existing database to add change_id columns if missing
+    pub fn migrate_add_change_ids(&self) -> Result<bool> {
+        let mut conn = self.get_conn()?;
+
+        // Check if change_id column exists in decision_nodes
+        let columns: Vec<(String,)> = diesel::sql_query(
+            "PRAGMA table_info(decision_nodes)"
+        )
+        .load::<PragmaTableInfo>(&mut conn)
+        .map(|rows| rows.into_iter().map(|r| (r.name,)).collect())
+        .unwrap_or_default();
+
+        let has_change_id = columns.iter().any(|(name,)| name == "change_id");
+
+        if has_change_id {
+            return Ok(false); // Already migrated
+        }
+
+        // Add change_id column to decision_nodes
+        diesel::sql_query("ALTER TABLE decision_nodes ADD COLUMN change_id TEXT")
+            .execute(&mut conn)?;
+
+        // Backfill change_id with UUIDs for existing nodes
+        let nodes: Vec<(i32,)> = diesel::sql_query(
+            "SELECT id FROM decision_nodes WHERE change_id IS NULL"
+        )
+        .load::<NodeIdOnly>(&mut conn)
+        .map(|rows| rows.into_iter().map(|r| (r.id,)).collect())
+        .unwrap_or_default();
+
+        for (node_id,) in nodes {
+            let change_id = Uuid::new_v4().to_string();
+            diesel::sql_query(format!(
+                "UPDATE decision_nodes SET change_id = '{}' WHERE id = {}",
+                change_id, node_id
+            ))
+            .execute(&mut conn)?;
+        }
+
+        // Create unique index on change_id
+        diesel::sql_query("CREATE UNIQUE INDEX IF NOT EXISTS idx_nodes_change_id_unique ON decision_nodes(change_id)")
+            .execute(&mut conn)?;
+
+        // Add from_change_id and to_change_id columns to decision_edges
+        let edge_columns: Vec<(String,)> = diesel::sql_query(
+            "PRAGMA table_info(decision_edges)"
+        )
+        .load::<PragmaTableInfo>(&mut conn)
+        .map(|rows| rows.into_iter().map(|r| (r.name,)).collect())
+        .unwrap_or_default();
+
+        let has_from_change_id = edge_columns.iter().any(|(name,)| name == "from_change_id");
+
+        if !has_from_change_id {
+            diesel::sql_query("ALTER TABLE decision_edges ADD COLUMN from_change_id TEXT")
+                .execute(&mut conn)?;
+            diesel::sql_query("ALTER TABLE decision_edges ADD COLUMN to_change_id TEXT")
+                .execute(&mut conn)?;
+
+            // Backfill edge change_ids from node change_ids
+            diesel::sql_query(
+                "UPDATE decision_edges SET
+                    from_change_id = (SELECT change_id FROM decision_nodes WHERE id = decision_edges.from_node_id),
+                    to_change_id = (SELECT change_id FROM decision_nodes WHERE id = decision_edges.to_node_id)"
+            )
+            .execute(&mut conn)?;
+
+            // Create indexes
+            diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_edges_from_change ON decision_edges(from_change_id)")
+                .execute(&mut conn)?;
+            diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_edges_to_change ON decision_edges(to_change_id)")
+                .execute(&mut conn)?;
+        }
+
+        Ok(true) // Migration performed
+    }
+
     // ========================================================================
     // Decision Graph Operations
     // ========================================================================
@@ -540,11 +748,13 @@ impl Database {
     ) -> Result<i32> {
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
+        let change_id = Uuid::new_v4().to_string();
 
         // Build metadata JSON with all optional fields
         let metadata = build_metadata_json(confidence, commit, prompt, files, branch);
 
         let new_node = NewDecisionNode {
+            change_id: &change_id,
             node_type,
             title,
             description,
@@ -569,25 +779,68 @@ impl Database {
         self.create_node(node_type, title, description, confidence, commit)
     }
 
+    /// Create a node with a specific change_id (for patch application)
+    pub fn create_node_with_change_id(
+        &self,
+        change_id: &str,
+        node_type: &str,
+        title: &str,
+        description: Option<&str>,
+        confidence: Option<u8>,
+        commit: Option<&str>,
+        prompt: Option<&str>,
+        files: Option<&str>,
+        branch: Option<&str>,
+    ) -> Result<i32> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        // Build metadata JSON with all optional fields
+        let metadata = build_metadata_json(confidence, commit, prompt, files, branch);
+
+        let new_node = NewDecisionNode {
+            change_id,
+            node_type,
+            title,
+            description,
+            status: "pending",
+            created_at: &now,
+            updated_at: &now,
+            metadata_json: metadata.as_deref(),
+        };
+
+        diesel::insert_into(decision_nodes::table)
+            .values(&new_node)
+            .execute(&mut conn)?;
+
+        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>("last_insert_rowid()"))
+            .first(&mut conn)?;
+
+        Ok(id)
+    }
+
     /// Create an edge between nodes
     pub fn create_edge(&self, from_id: i32, to_id: i32, edge_type: &str, rationale: Option<&str>) -> Result<i32> {
         let mut conn = self.get_conn()?;
 
-        // Validate both nodes exist before creating edge
-        let from_exists: bool = decision_nodes::table
+        // Validate both nodes exist and get their change_ids
+        let from_node = decision_nodes::table
             .filter(decision_nodes::id.eq(from_id))
             .first::<DecisionNode>(&mut conn)
-            .is_ok();
-        let to_exists: bool = decision_nodes::table
+            .ok();
+        let to_node = decision_nodes::table
             .filter(decision_nodes::id.eq(to_id))
             .first::<DecisionNode>(&mut conn)
-            .is_ok();
+            .ok();
 
-        if !from_exists && !to_exists {
+        let from_change_id = from_node.as_ref().map(|n| n.change_id.clone());
+        let to_change_id = to_node.as_ref().map(|n| n.change_id.clone());
+
+        if from_node.is_none() && to_node.is_none() {
             return Err(DbError::Validation(format!("Both nodes {} and {} do not exist. Run 'deciduous nodes' to see existing nodes.", from_id, to_id)));
-        } else if !from_exists {
+        } else if from_node.is_none() {
             return Err(DbError::Validation(format!("Source node {} does not exist. Run 'deciduous nodes' to see existing nodes.", from_id)));
-        } else if !to_exists {
+        } else if to_node.is_none() {
             return Err(DbError::Validation(format!("Target node {} does not exist. Run 'deciduous nodes' to see existing nodes.", to_id)));
         }
 
@@ -596,6 +849,8 @@ impl Database {
         let new_edge = NewDecisionEdge {
             from_node_id: from_id,
             to_node_id: to_id,
+            from_change_id: from_change_id.as_deref(),
+            to_change_id: to_change_id.as_deref(),
             edge_type,
             weight: Some(1.0),
             rationale,

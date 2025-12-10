@@ -1709,6 +1709,186 @@
       "created_at": "2025-12-10T17:01:34.221203-05:00",
       "updated_at": "2025-12-10T17:01:34.221203-05:00",
       "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
+    },
+    {
+      "id": 172,
+      "node_type": "goal",
+      "title": "Design multi-user graph sync with diff/patch model for PR workflow",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T17:47:59.603521-05:00",
+      "updated_at": "2025-12-10T17:47:59.603521-05:00",
+      "metadata_json": "{\"branch\":\"feature/multi-user-graph-sync\",\"confidence\":85,\"prompt\":\"User wants multiple users writing to local copies, pushing diffs to central repo, handling references to existing nodes, integrating with PR process\"}"
+    },
+    {
+      "id": 173,
+      "node_type": "decision",
+      "title": "How to handle multi-user graph sync",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T17:48:11.012439-05:00",
+      "updated_at": "2025-12-10T17:48:11.012439-05:00",
+      "metadata_json": "{\"branch\":\"feature/multi-user-graph-sync\",\"confidence\":75,\"prompt\":\"Core problem: multiple users have local .deciduous/deciduous.db, need to sync changes to shared repo without conflicts\"}"
+    },
+    {
+      "id": 174,
+      "node_type": "option",
+      "title": "Option A: JSON diff files - export new nodes/edges as JSON patches",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T17:48:25.942729-05:00",
+      "updated_at": "2025-12-10T17:48:25.942729-05:00",
+      "metadata_json": "{\"branch\":\"feature/multi-user-graph-sync\",\"confidence\":70}"
+    },
+    {
+      "id": 175,
+      "node_type": "option",
+      "title": "Option B: Git-like content-addressable storage - hash nodes by content",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T17:48:31.188458-05:00",
+      "updated_at": "2025-12-10T17:48:31.188458-05:00",
+      "metadata_json": "{\"branch\":\"feature/multi-user-graph-sync\",\"confidence\":60}"
+    },
+    {
+      "id": 176,
+      "node_type": "option",
+      "title": "Option C: UUID-based node IDs - globally unique, no conflicts",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T17:48:36.189513-05:00",
+      "updated_at": "2025-12-10T17:48:36.189513-05:00",
+      "metadata_json": "{\"branch\":\"feature/multi-user-graph-sync\",\"confidence\":75}"
+    },
+    {
+      "id": 177,
+      "node_type": "option",
+      "title": "Option D: Hybrid - UUIDs for new nodes, stable refs for existing nodes",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T17:48:42.822383-05:00",
+      "updated_at": "2025-12-10T17:48:42.822383-05:00",
+      "metadata_json": "{\"branch\":\"feature/multi-user-graph-sync\",\"confidence\":80}"
+    },
+    {
+      "id": 178,
+      "node_type": "observation",
+      "title": "jj (Jujutsu) uses change IDs vs commit IDs - change IDs are stable across rebases",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T17:48:58.106355-05:00",
+      "updated_at": "2025-12-10T17:48:58.106355-05:00",
+      "metadata_json": "{\"branch\":\"feature/multi-user-graph-sync\",\"confidence\":85}"
+    },
+    {
+      "id": 179,
+      "node_type": "observation",
+      "title": "jj key insight: change IDs are stable across rebases, separate from commit IDs. Uses bit-reversed commit ID for git-imported commits",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T17:49:32.528532-05:00",
+      "updated_at": "2025-12-10T17:49:32.528532-05:00",
+      "metadata_json": "{\"branch\":\"feature/multi-user-graph-sync\",\"confidence\":90}"
+    },
+    {
+      "id": 180,
+      "node_type": "option",
+      "title": "Option E: jj-inspired - UUID 'change_id' per node, separate from integer 'id', stable across sync",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T17:49:56.483634-05:00",
+      "updated_at": "2025-12-10T17:49:56.483634-05:00",
+      "metadata_json": "{\"branch\":\"feature/multi-user-graph-sync\",\"confidence\":85}"
+    },
+    {
+      "id": 181,
+      "node_type": "action",
+      "title": "Choosing Option E: jj-inspired dual-ID model",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T17:50:09.138830-05:00",
+      "updated_at": "2025-12-10T17:50:09.138830-05:00",
+      "metadata_json": "{\"branch\":\"feature/multi-user-graph-sync\",\"confidence\":85,\"prompt\":\"change_id (UUID) is globally unique and stable, id (int) is local to each database. Diffs use change_ids for references.\"}"
+    },
+    {
+      "id": 182,
+      "node_type": "observation",
+      "title": "Current schema uses auto-increment integer ids - not suitable for multi-user. Need to add change_id UUID column",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T17:50:46.768696-05:00",
+      "updated_at": "2025-12-10T17:50:46.768696-05:00",
+      "metadata_json": "{\"branch\":\"feature/multi-user-graph-sync\",\"confidence\":90}"
+    },
+    {
+      "id": 183,
+      "node_type": "action",
+      "title": "Design document created: MULTI_USER_SYNC.md",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T17:51:32.528339-05:00",
+      "updated_at": "2025-12-10T17:51:32.528339-05:00",
+      "metadata_json": "{\"branch\":\"feature/multi-user-graph-sync\",\"confidence\":90,\"files\":[\"docs/MULTI_USER_SYNC.md\"]}"
+    },
+    {
+      "id": 184,
+      "node_type": "decision",
+      "title": "Diff/Patch JSON format specification",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T17:51:42.728283-05:00",
+      "updated_at": "2025-12-10T17:51:42.728283-05:00",
+      "metadata_json": "{\"branch\":\"feature/multi-user-graph-sync\",\"confidence\":85,\"prompt\":\"Define version, author, branch, base_commit, nodes array, edges array structure\"}"
+    },
+    {
+      "id": 185,
+      "node_type": "decision",
+      "title": "PR-based workflow for syncing patches",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T17:51:47.932980-05:00",
+      "updated_at": "2025-12-10T17:51:47.932980-05:00",
+      "metadata_json": "{\"branch\":\"feature/multi-user-graph-sync\",\"confidence\":85,\"prompt\":\"Export to .deciduous/patches/, commit files, PR merges them, others apply after pull\"}"
+    },
+    {
+      "id": 186,
+      "node_type": "decision",
+      "title": "Conflict resolution strategy: idempotent, additive patches",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T17:51:57.237027-05:00",
+      "updated_at": "2025-12-10T17:51:57.237027-05:00",
+      "metadata_json": "{\"branch\":\"feature/multi-user-graph-sync\",\"confidence\":80,\"prompt\":\"Same change_id = skip, edges dedupe by tuple, no deletions in v1\"}"
+    },
+    {
+      "id": 187,
+      "node_type": "decision",
+      "title": "Schema migration: add change_id UUID to nodes, from/to_change_id to edges",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T17:52:03.944998-05:00",
+      "updated_at": "2025-12-10T17:52:03.944998-05:00",
+      "metadata_json": "{\"branch\":\"feature/multi-user-graph-sync\",\"confidence\":90,\"prompt\":\"Backfill existing with random UUIDs, create unique index\"}"
+    },
+    {
+      "id": 188,
+      "node_type": "action",
+      "title": "Implemented change_id schema migration, diff export/apply commands",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T18:00:07.905966-05:00",
+      "updated_at": "2025-12-10T18:00:07.905966-05:00",
+      "metadata_json": "{\"branch\":\"feature/multi-user-graph-sync\",\"confidence\":90,\"files\":[\"src/schema.rs\",\"src/db.rs\",\"src/diff.rs\",\"src/main.rs\"]}"
+    },
+    {
+      "id": 189,
+      "node_type": "outcome",
+      "title": "Multi-user diff/patch system working - export, apply, migrate commands all functional",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T18:02:32.017798-05:00",
+      "updated_at": "2025-12-10T18:02:32.017798-05:00",
+      "metadata_json": "{\"branch\":\"feature/multi-user-graph-sync\",\"confidence\":95}"
     }
   ],
   "edges": [
@@ -2719,6 +2899,168 @@
       "weight": 1.0,
       "rationale": "Fixed the bug - viewer.html was outdated",
       "created_at": "2025-12-10T17:01:39.654468-05:00"
+    },
+    {
+      "id": 113,
+      "from_node_id": 172,
+      "to_node_id": 173,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Goal spawns this core design decision",
+      "created_at": "2025-12-10T17:48:17.790191-05:00"
+    },
+    {
+      "id": 114,
+      "from_node_id": 173,
+      "to_node_id": 174,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Option A considered",
+      "created_at": "2025-12-10T17:48:48.812104-05:00"
+    },
+    {
+      "id": 115,
+      "from_node_id": 173,
+      "to_node_id": 175,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Option B considered",
+      "created_at": "2025-12-10T17:48:48.820317-05:00"
+    },
+    {
+      "id": 116,
+      "from_node_id": 173,
+      "to_node_id": 176,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Option C considered",
+      "created_at": "2025-12-10T17:48:48.828429-05:00"
+    },
+    {
+      "id": 117,
+      "from_node_id": 173,
+      "to_node_id": 177,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Option D considered",
+      "created_at": "2025-12-10T17:48:48.839756-05:00"
+    },
+    {
+      "id": 118,
+      "from_node_id": 173,
+      "to_node_id": 180,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Option E considered - jj-inspired approach",
+      "created_at": "2025-12-10T17:50:02.562877-05:00"
+    },
+    {
+      "id": 119,
+      "from_node_id": 178,
+      "to_node_id": 180,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "jj observation informs this option",
+      "created_at": "2025-12-10T17:50:02.570775-05:00"
+    },
+    {
+      "id": 120,
+      "from_node_id": 173,
+      "to_node_id": 181,
+      "edge_type": "chosen",
+      "weight": 1.0,
+      "rationale": "Decision resolved with Option E",
+      "created_at": "2025-12-10T17:50:14.719399-05:00"
+    },
+    {
+      "id": 121,
+      "from_node_id": 180,
+      "to_node_id": 181,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Option E selected",
+      "created_at": "2025-12-10T17:50:14.728370-05:00"
+    },
+    {
+      "id": 122,
+      "from_node_id": 181,
+      "to_node_id": 182,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Action leads to this observation about schema",
+      "created_at": "2025-12-10T17:50:52.394863-05:00"
+    },
+    {
+      "id": 123,
+      "from_node_id": 181,
+      "to_node_id": 183,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Action follows from design decision",
+      "created_at": "2025-12-10T17:51:36.999074-05:00"
+    },
+    {
+      "id": 124,
+      "from_node_id": 183,
+      "to_node_id": 184,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Design doc specifies format",
+      "created_at": "2025-12-10T17:52:10.186945-05:00"
+    },
+    {
+      "id": 125,
+      "from_node_id": 183,
+      "to_node_id": 185,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Design doc specifies workflow",
+      "created_at": "2025-12-10T17:52:10.195539-05:00"
+    },
+    {
+      "id": 126,
+      "from_node_id": 183,
+      "to_node_id": 186,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Design doc specifies conflict resolution",
+      "created_at": "2025-12-10T17:52:10.204692-05:00"
+    },
+    {
+      "id": 127,
+      "from_node_id": 183,
+      "to_node_id": 187,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Design doc specifies schema migration",
+      "created_at": "2025-12-10T17:52:10.211835-05:00"
+    },
+    {
+      "id": 128,
+      "from_node_id": 187,
+      "to_node_id": 188,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Schema migration decision led to implementation",
+      "created_at": "2025-12-10T18:00:12.909407-05:00"
+    },
+    {
+      "id": 129,
+      "from_node_id": 172,
+      "to_node_id": 189,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Goal achieved - multi-user sync system working",
+      "created_at": "2025-12-10T18:02:38.512831-05:00"
+    },
+    {
+      "id": 130,
+      "from_node_id": 188,
+      "to_node_id": 189,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation led to successful outcome",
+      "created_at": "2025-12-10T18:02:38.523352-05:00"
     }
   ]
 }

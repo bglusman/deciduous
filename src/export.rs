@@ -523,6 +523,7 @@ mod tests {
             nodes: vec![
                 DecisionNode {
                     id: 1,
+                    change_id: "change-id-1".to_string(),
                     node_type: "goal".to_string(),
                     title: "Build feature X".to_string(),
                     description: None,
@@ -533,6 +534,7 @@ mod tests {
                 },
                 DecisionNode {
                     id: 2,
+                    change_id: "change-id-2".to_string(),
                     node_type: "decision".to_string(),
                     title: "Choose approach".to_string(),
                     description: None,
@@ -543,6 +545,7 @@ mod tests {
                 },
                 DecisionNode {
                     id: 3,
+                    change_id: "change-id-3".to_string(),
                     node_type: "action".to_string(),
                     title: "Implement solution".to_string(),
                     description: None,
@@ -557,6 +560,8 @@ mod tests {
                     id: 1,
                     from_node_id: 1,
                     to_node_id: 2,
+                    from_change_id: Some("change-id-1".to_string()),
+                    to_change_id: Some("change-id-2".to_string()),
                     edge_type: "leads_to".to_string(),
                     weight: Some(1.0),
                     rationale: Some("Goal requires decision".to_string()),
@@ -566,6 +571,8 @@ mod tests {
                     id: 2,
                     from_node_id: 2,
                     to_node_id: 3,
+                    from_change_id: Some("change-id-2".to_string()),
+                    to_change_id: Some("change-id-3".to_string()),
                     edge_type: "leads_to".to_string(),
                     weight: Some(1.0),
                     rationale: None,

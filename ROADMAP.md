@@ -185,6 +185,37 @@
 - [ ] Add `deciduous log` command to view git.log contents
 - [ ] Document git.log purpose and location in tooling files
 
+### Multi-User Namespaces & Graph Merging
+- [ ] Support multiple users/agents writing to their own namespaces
+  - Each user/agent gets isolated namespace for their decision nodes
+  - Avoid write conflicts when multiple sessions work in parallel
+  - Namespace could be: user ID, session ID, agent name, or custom tag
+- [ ] Namespace-scoped operations
+  - `deciduous add goal "..." --namespace alice`
+  - `deciduous nodes --namespace bob`
+  - Nodes tagged with namespace in metadata_json
+- [ ] Merge namespaces into unified graph
+  - `deciduous merge --from alice --into main`
+  - Conflict resolution strategies (timestamp, manual, auto-link)
+  - Preserve provenance: track which namespace each node originated from
+- [ ] Cross-namespace linking
+  - Allow edges between nodes in different namespaces
+  - "Alice's outcome depends on Bob's action"
+  - Visualize cross-namespace dependencies
+- [ ] Web UI namespace support
+  - Filter by namespace (like branch filter)
+  - Color-code nodes by namespace/author
+  - Merged view showing all namespaces together
+- [ ] Use cases:
+  - **Team collaboration**: Multiple devs working on same codebase
+  - **Multi-agent workflows**: Different AI agents with their own decision streams
+  - **PR-based isolation**: Each PR gets its own namespace, merged on PR merge
+  - **Review workflows**: Reviewer adds nodes in their namespace, author sees feedback
+- [ ] Sync/rebase semantics
+  - Similar to git branches but for decision graphs
+  - `deciduous rebase --namespace feature --onto main`
+  - Handle node ID conflicts during merge
+
 ### DuckDB for OLAP Analytics
 - [ ] Add DuckDB as optional analytical backend for decision graph queries
   - SQLite is great for OLTP (single-project, real-time logging)

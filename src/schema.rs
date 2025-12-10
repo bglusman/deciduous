@@ -13,6 +13,7 @@ diesel::table! {
 diesel::table! {
     decision_nodes (id) {
         id -> Integer,
+        change_id -> Text,
         node_type -> Text,
         title -> Text,
         description -> Nullable<Text>,
@@ -28,6 +29,8 @@ diesel::table! {
         id -> Integer,
         from_node_id -> Integer,
         to_node_id -> Integer,
+        from_change_id -> Nullable<Text>,
+        to_change_id -> Nullable<Text>,
         edge_type -> Text,
         weight -> Nullable<Double>,
         rationale -> Nullable<Text>,
