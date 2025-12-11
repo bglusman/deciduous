@@ -58,6 +58,22 @@
   - Better hierarchical layout algorithm
   - Zoom and pan controls
 
+### Release Tooling
+- [ ] **Automated release notes generation**
+  - `deciduous release-notes --from v0.7.0 --to v0.8.0`
+  - Query graph for all goals/outcomes between versions
+  - Group by feature area (TUI, sync, export, etc.)
+  - Generate markdown summary of what changed and why
+- [ ] **PR tagging for releases**
+  - Tag PRs that landed in a release
+  - `deciduous release tag-prs v0.8.0` - adds label to all PRs in release
+  - Link PRs back to decision graph nodes
+- [ ] **Release summary from decision graph**
+  - Walk the graph to find all completed goals since last release
+  - Show the decision chain that led to each feature
+  - Include key prompts/feedback that drove changes
+  - Generate changelog with decision context
+
 ### TUI PR Review Mode
 - [ ] **GitHub PR integration in TUI**
   - Pull in PR comments from GitHub API
