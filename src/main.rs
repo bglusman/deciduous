@@ -396,11 +396,11 @@ fn main() {
                         // Filter by branch if specified
                         let branch_match = match &branch {
                             Some(b) => {
-                                n.metadata_json.as_ref().map_or(false, |meta| {
+                                n.metadata_json.as_ref().is_some_and(|meta| {
                                     serde_json::from_str::<serde_json::Value>(meta)
                                         .ok()
-                                        .and_then(|v| v.get("branch").and_then(|b| b.as_str()).map(|s| s.to_string()))
-                                        .map_or(false, |node_branch| node_branch == *b)
+                                        .and_then(|v| v.get("branch").and_then(|br| br.as_str()).map(|s| s.to_string()))
+                                        .is_some_and(|node_branch| node_branch == *b)
                                 })
                             }
                             None => true,
