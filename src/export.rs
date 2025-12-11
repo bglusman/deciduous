@@ -655,4 +655,251 @@ mod tests {
         let meta = Some(r#"{"commit":"abc1234"}"#.to_string());
         assert_eq!(extract_commit(&meta), Some("abc1234".to_string()));
     }
+
+    // === Additional Helper Function Tests ===
+
+    #[test]
+    fn test_node_shape() {
+        assert_eq!(node_shape("goal"), "house");
+        assert_eq!(node_shape("decision"), "diamond");
+        assert_eq!(node_shape("option"), "parallelogram");
+        assert_eq!(node_shape("action"), "box");
+        assert_eq!(node_shape("outcome"), "ellipse");
+        assert_eq!(node_shape("observation"), "note");
+        assert_eq!(node_shape("unknown"), "box"); // default
+    }
+
+    #[test]
+    fn test_node_color() {
+        assert_eq!(node_color("goal"), "#FFE4B5");
+        assert_eq!(node_color("decision"), "#E6E6FA");
+        assert_eq!(node_color("option"), "#E0FFFF");
+        assert_eq!(node_color("action"), "#90EE90");
+        assert_eq!(node_color("outcome"), "#87CEEB");
+        assert_eq!(node_color("observation"), "#DDA0DD");
+        assert_eq!(node_color("unknown"), "#F5F5F5"); // default: white smoke
+    }
+
+    #[test]
+    fn test_edge_style() {
+        assert_eq!(edge_style("leads_to"), "solid"); // default
+        assert_eq!(edge_style("chosen"), "bold");
+        assert_eq!(edge_style("rejected"), "dashed");
+        assert_eq!(edge_style("blocks"), "dotted");
+        assert_eq!(edge_style("unknown"), "solid"); // default
+    }
+
+    #[test]
+    fn test_edge_color() {
+        assert_eq!(edge_color("leads_to"), "#333333"); // default
+        assert_eq!(edge_color("chosen"), "#228B22"); // forest green
+        assert_eq!(edge_color("rejected"), "#DC143C"); // crimson
+        assert_eq!(edge_color("blocks"), "#FF4500"); // orange red
+        assert_eq!(edge_color("enables"), "#4169E1"); // royal blue
+        assert_eq!(edge_color("unknown"), "#333333"); // default
+    }
+
+    #[test]
+    fn test_escape_dot() {
+        assert_eq!(escape_dot("hello"), "hello");
+        assert_eq!(escape_dot("hello \"world\""), "hello \\\"world\\\"");
+        assert_eq!(escape_dot("line1\nline2"), "line1\\nline2");
+        assert_eq!(escape_dot("back\\slash"), "back\\\\slash");
+    }
+
+    #[test]
+    fn test_truncate() {
+        assert_eq!(truncate("hello", 10), "hello");
+        assert_eq!(truncate("hello world", 8), "hello...");
+        assert_eq!(truncate("hi", 2), "hi");
+        assert_eq!(truncate("hello", 5), "hello");
+    }
+
+    #[test]
+    fn test_truncate_unicode() {
+        // Unicode-safe truncation
+        assert_eq!(truncate("🎉🎊🎁", 10), "🎉🎊🎁");
+        let result = truncate("🎉🎊🎁🎄🎅🎆", 5);
+        assert!(result.ends_with("...") || result.chars().count() <= 5);
+    }
+
+    // === DOT Config Tests ===
+
+    #[test]
+    fn test_dot_config_default() {
+        let config = DotConfig::default();
+        assert!(config.show_rationale);
+        assert!(config.show_confidence);
+        assert!(config.show_ids);
+        assert_eq!(config.rankdir, "TB");
+        assert!(config.title.is_none());
+    }
+
+    #[test]
+    fn test_dot_with_title() {
+        let graph = sample_graph();
+        let config = DotConfig {
+            title: Some("My Graph".to_string()),
+            ..Default::default()
+        };
+        let dot = graph_to_dot(&graph, &config);
+
+        assert!(dot.contains("label=\"My Graph\""));
+        assert!(dot.contains("labelloc=t"));
+    }
+
+    #[test]
+    fn test_dot_with_custom_rankdir() {
+        let graph = sample_graph();
+        let config = DotConfig {
+            rankdir: "LR".to_string(),
+            ..Default::default()
+        };
+        let dot = graph_to_dot(&graph, &config);
+
+        assert!(dot.contains("rankdir=LR"));
+    }
+
+    // === Filter Tests ===
+
+    #[test]
+    fn test_filter_graph_empty_roots() {
+        let graph = sample_graph();
+        let filtered = filter_graph_from_roots(&graph, &[]);
+
+        // Empty roots should return empty graph
+        assert!(filtered.nodes.is_empty());
+        assert!(filtered.edges.is_empty());
+    }
+
+    #[test]
+    fn test_filter_graph_single_node() {
+        let graph = sample_graph();
+        // Filter starting from node 3 (leaf)
+        let filtered = filter_graph_from_roots(&graph, &[3]);
+
+        assert_eq!(filtered.nodes.len(), 1);
+        assert_eq!(filtered.edges.len(), 0);
+    }
+
+    #[test]
+    fn test_filter_graph_nonexistent_root() {
+        let graph = sample_graph();
+        let filtered = filter_graph_from_roots(&graph, &[999]);
+
+        assert!(filtered.nodes.is_empty());
+    }
+
+    // === Extract Tests ===
+
+    #[test]
+    fn test_extract_confidence_invalid_json() {
+        let meta = Some("not json".to_string());
+        assert_eq!(extract_confidence(&meta), None);
+    }
+
+    #[test]
+    fn test_extract_confidence_missing_field() {
+        let meta = Some(r#"{"branch":"main"}"#.to_string());
+        assert_eq!(extract_confidence(&meta), None);
+    }
+
+    #[test]
+    fn test_extract_commit_invalid_json() {
+        let meta = Some("not json".to_string());
+        assert_eq!(extract_commit(&meta), None);
+    }
+
+    // === Writeup Config Tests ===
+
+    #[test]
+    fn test_writeup_without_dot() {
+        let graph = sample_graph();
+        let config = WriteupConfig {
+            title: "No DOT".to_string(),
+            root_ids: vec![],
+            include_dot: false,
+            include_test_plan: true,
+            png_filename: None,
+            github_repo: None,
+            git_branch: None,
+        };
+        let writeup = generate_pr_writeup(&graph, &config);
+
+        assert!(!writeup.contains("```dot"));
+        // Note: "## Decision Graph Reference" is always present, but "## Decision Graph\n" is not
+        assert!(!writeup.contains("## Decision Graph\n"));
+    }
+
+    #[test]
+    fn test_writeup_without_test_plan() {
+        let graph = sample_graph();
+        let config = WriteupConfig {
+            title: "No Test Plan".to_string(),
+            root_ids: vec![],
+            include_dot: false,
+            include_test_plan: false,
+            png_filename: None,
+            github_repo: None,
+            git_branch: None,
+        };
+        let writeup = generate_pr_writeup(&graph, &config);
+
+        assert!(!writeup.contains("## Test Plan"));
+    }
+
+    #[test]
+    fn test_writeup_with_png() {
+        let graph = sample_graph();
+        let config = WriteupConfig {
+            title: "With PNG".to_string(),
+            root_ids: vec![],
+            include_dot: true,
+            include_test_plan: false,
+            png_filename: Some("docs/graph.png".to_string()),
+            github_repo: Some("owner/repo".to_string()),
+            git_branch: Some("main".to_string()),
+        };
+        let writeup = generate_pr_writeup(&graph, &config);
+
+        assert!(writeup.contains("![Decision Graph]"));
+        assert!(writeup.contains("raw.githubusercontent.com"));
+        assert!(writeup.contains("<details>")); // DOT in collapsible
+    }
+
+    // === Empty Graph Tests ===
+
+    #[test]
+    fn test_dot_empty_graph() {
+        let graph = DecisionGraph {
+            nodes: vec![],
+            edges: vec![],
+        };
+        let config = DotConfig::default();
+        let dot = graph_to_dot(&graph, &config);
+
+        assert!(dot.contains("digraph DecisionGraph"));
+        assert!(dot.contains("}"));
+    }
+
+    #[test]
+    fn test_writeup_empty_graph() {
+        let graph = DecisionGraph {
+            nodes: vec![],
+            edges: vec![],
+        };
+        let config = WriteupConfig {
+            title: "Empty".to_string(),
+            root_ids: vec![],
+            include_dot: false,
+            include_test_plan: false,
+            png_filename: None,
+            github_repo: None,
+            git_branch: None,
+        };
+        let writeup = generate_pr_writeup(&graph, &config);
+
+        // Should still produce valid output
+        assert!(writeup.contains("## Summary"));
+    }
 }
