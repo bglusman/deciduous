@@ -24,6 +24,15 @@
 - [ ] Support for additional editors (Cursor, Copilot, etc.)
 - [ ] `deciduous init --all` to bootstrap for all supported editors at once
 
+### Context Recovery (Critical)
+- [ ] **Make compaction restore actually reliably work**
+  - `/context` command should fully restore working state after context loss
+  - Query decision graph for recent goals, decisions, actions in progress
+  - Show what was being worked on, what's complete, what's pending
+  - Include recent git activity, uncommitted changes, branch state
+  - Pull in relevant prompts from history if available
+  - Goal: new session can pick up exactly where the last one left off
+
 ### Commit-Centric Graph Navigation
 - [ ] More robust per-commit tooling
   - Link nodes to commits more reliably
