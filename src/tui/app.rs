@@ -4,9 +4,24 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use crossterm::event::{MouseEvent, MouseEventKind, MouseButton};
+use ratatui::style::Color;
+use syntect::highlighting::ThemeSet;
+use syntect::parsing::SyntaxSet;
+use syntect::easy::HighlightLines;
 
 use crate::{Database, DecisionGraph, DecisionNode, DecisionEdge};
 use super::types;
+
+// Lazy static syntax highlighting resources
+lazy_static::lazy_static! {
+    static ref PS: SyntaxSet = SyntaxSet::load_defaults_newlines();
+    static ref TS: ThemeSet = ThemeSet::load_defaults();
+}
+
+/// Convert syntect color to ratatui color
+fn syntect_to_ratatui_color(c: syntect::highlighting::Color) -> Color {
+    Color::Rgb(c.r, c.g, c.b)
+}
 
 /// Current view mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -23,6 +38,65 @@ pub enum Focus {
     Search,
     FilePicker,
     Help,
+    Modal,
+}
+
+/// Modal content types
+#[derive(Debug, Clone)]
+pub enum ModalContent {
+    Commit {
+        hash: String,
+        node_title: String,
+        commit_message: String,
+        diff_lines: Vec<StyledDiffLine>,  // Pre-rendered diff lines
+        files: Vec<String>,
+    },
+    NodeDetail { node_id: i32 },
+    GoalStory { goal_id: i32 },
+    FilePreview { path: String, content: String },
+    FileDiff { path: String, diff: String },
+}
+
+/// Pre-rendered diff line with styling info
+#[derive(Debug, Clone)]
+pub struct StyledDiffLine {
+    pub line_type: DiffLineType,
+    pub content: String,
+    /// Pre-computed styled spans for syntax highlighting (computed once at modal open)
+    pub styled_spans: Vec<(ratatui::style::Color, String)>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum DiffLineType {
+    Header,      // diff, index, +++, ---
+    Hunk,        // @@
+    Added,       // +
+    Removed,     // -
+    Context,     // space
+    Other,
+}
+
+/// Scrollable modal state
+#[derive(Debug, Clone, Default)]
+pub struct ModalScroll {
+    pub offset: usize,
+    pub total_lines: usize,
+}
+
+/// Which section of split modal is focused
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ModalSection {
+    #[default]
+    Top,
+    Bottom,
+}
+
+/// State for commit modal with split sections
+#[derive(Debug, Clone, Default)]
+pub struct CommitModalState {
+    pub section: ModalSection,
+    pub diff_scroll: usize,
+    pub diff_total_lines: usize,
 }
 
 /// Input mode
@@ -31,6 +105,7 @@ pub enum Mode {
     Normal,
     Search,
     Command,
+    BranchSearch,
 }
 
 /// File picker state for multi-select
@@ -93,6 +168,7 @@ pub struct App {
     pub current_view: View,
     pub selected_index: usize,
     pub scroll_offset: usize,
+    pub reverse_order: bool,  // true = chronological (oldest first), false = newest first
 
     // Detail panel
     pub detail_expanded: bool,
@@ -102,6 +178,9 @@ pub struct App {
     pub type_filter: Option<String>,
     pub branch_filter: Option<String>,
     pub search_query: String,
+    pub branch_search_query: String,
+    pub branch_search_matches: Vec<String>,
+    pub branch_search_index: usize,
 
     // UI state
     pub focus: Focus,
@@ -126,6 +205,18 @@ pub struct App {
 
     // Status message
     pub status_message: Option<(String, Instant)>,
+
+    // Modal
+    pub modal: Option<ModalContent>,
+    pub modal_scroll: ModalScroll,
+    pub commit_modal: CommitModalState,
+
+    // Detail panel file browser
+    pub detail_file_index: usize,
+    pub detail_in_files: bool,  // true when navigating files section
+
+    // Pending files to open in editor (set by app, consumed by main loop)
+    pub pending_editor_files: Option<Vec<String>>,
 }
 
 impl App {
@@ -153,11 +244,15 @@ impl App {
             current_view: View::Timeline,
             selected_index: 0,
             scroll_offset: 0,
+            reverse_order: false,  // Default: newest first
             detail_expanded: true,
             detail_scroll: 0,
             type_filter: None,
             branch_filter: None,
             search_query: String::new(),
+            branch_search_query: String::new(),
+            branch_search_matches: vec![],
+            branch_search_index: 0,
             focus: Focus::List,
             mode: Mode::Normal,
             file_picker: None,
@@ -170,6 +265,12 @@ impl App {
             refresh_shown_at: None,
             pending_g: false,
             status_message: None,
+            modal: None,
+            modal_scroll: ModalScroll::default(),
+            commit_modal: CommitModalState::default(),
+            detail_file_index: 0,
+            detail_in_files: false,
+            pending_editor_files: None,
         })
     }
 
@@ -236,8 +337,12 @@ impl App {
             });
         }
 
-        // Sort by created_at descending
-        nodes.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        // Sort by created_at (descending by default, ascending if reverse_order)
+        if self.reverse_order {
+            nodes.sort_by(|a, b| a.created_at.cmp(&b.created_at)); // Oldest first
+        } else {
+            nodes.sort_by(|a, b| b.created_at.cmp(&a.created_at)); // Newest first
+        }
 
         self.filtered_nodes = nodes;
 
@@ -293,13 +398,21 @@ impl App {
         if self.selected_index > 0 {
             self.selected_index -= 1;
             self.ensure_visible();
+            self.reset_file_browser(); // Reset file index when changing nodes
         }
+    }
+
+    /// Reset file browser state when changing nodes
+    fn reset_file_browser(&mut self) {
+        self.detail_file_index = 0;
+        self.detail_in_files = false;
     }
 
     pub fn move_down(&mut self) {
         if self.selected_index + 1 < self.filtered_nodes.len() {
             self.selected_index += 1;
             self.ensure_visible();
+            self.reset_file_browser(); // Reset file index when changing nodes
         }
     }
 
@@ -340,10 +453,12 @@ impl App {
     }
 
     pub fn toggle_view(&mut self) {
-        self.current_view = match self.current_view {
-            View::Timeline => View::Dag,
-            View::Dag => View::Timeline,
-        };
+        // DAG view disabled for now - needs layout improvements
+        // self.current_view = match self.current_view {
+        //     View::Timeline => View::Dag,
+        //     View::Dag => View::Timeline,
+        // };
+        self.set_status("DAG view temporarily disabled".to_string());
     }
 
     pub fn toggle_detail(&mut self) {
@@ -374,18 +489,18 @@ impl App {
         self.status_message = Some((message, Instant::now()));
     }
 
-    /// Open files in editor
+    /// Open files in editor - stores files to open, caller handles actual opening
     pub fn open_files(&mut self, files: Vec<String>) {
         if files.is_empty() {
             self.set_status("No files to open".to_string());
             return;
         }
+        self.pending_editor_files = Some(files);
+    }
 
-        let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
-
-        // We need to temporarily leave the TUI to open the editor
-        // This is handled by the caller
-        self.set_status(format!("Opening {} file(s) in {}", files.len(), editor));
+    /// Check if we have pending files to open in editor
+    pub fn take_pending_editor_files(&mut self) -> Option<Vec<String>> {
+        self.pending_editor_files.take()
     }
 
     /// Show file picker for multi-file selection
@@ -415,6 +530,17 @@ impl App {
         self.apply_filters();
     }
 
+    /// Toggle timeline order (chronological vs reverse-chronological)
+    pub fn toggle_order(&mut self) {
+        self.reverse_order = !self.reverse_order;
+        self.apply_filters();
+        if self.reverse_order {
+            self.set_status("Timeline: Chronological (oldest first)".to_string());
+        } else {
+            self.set_status("Timeline: Reverse-chronological (newest first)".to_string());
+        }
+    }
+
     // DAG navigation
     pub fn dag_pan(&mut self, dx: i32, dy: i32) {
         self.dag_offset_x += dx * 5;
@@ -433,5 +559,497 @@ impl App {
         self.dag_zoom = 1.0;
         self.dag_offset_x = 0;
         self.dag_offset_y = 0;
+    }
+
+    /// Show commit modal for current node
+    pub fn show_commit_modal(&mut self) {
+        if let Some(node) = self.selected_node() {
+            if let Some(commit) = types::get_commit(node) {
+                // Get commit message (without diff)
+                let commit_message = std::process::Command::new("git")
+                    .args(["log", "-1", "--format=%B", &commit])
+                    .output()
+                    .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+                    .unwrap_or_else(|e| format!("Failed to get commit message: {}", e));
+
+                // Get full diff
+                let diff_output = std::process::Command::new("git")
+                    .args(["show", "--format=", "-p", &commit])
+                    .output()
+                    .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+                    .unwrap_or_else(|e| format!("Failed to get diff: {}", e));
+
+                // Get list of changed files
+                let files: Vec<String> = std::process::Command::new("git")
+                    .args(["show", "--format=", "--name-only", &commit])
+                    .output()
+                    .map(|o| {
+                        String::from_utf8_lossy(&o.stdout)
+                            .lines()
+                            .filter(|l| !l.is_empty())
+                            .map(|l| l.to_string())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                // Pre-process diff lines with syntax highlighting (computed once, used many times)
+                // Use base16-mocha.dark for better visibility on dark terminals
+                let theme = &TS.themes["base16-mocha.dark"];
+                let mut current_file: Option<String> = None;
+                let mut highlighter: Option<HighlightLines> = None;
+
+                let diff_lines: Vec<StyledDiffLine> = diff_output
+                    .lines()
+                    .map(|line| {
+                        // Classify line type
+                        let line_type = if line.starts_with("@@") {
+                            DiffLineType::Hunk
+                        } else if line.starts_with("diff ") || line.starts_with("index ")
+                            || line.starts_with("+++") || line.starts_with("---") {
+                            DiffLineType::Header
+                        } else if line.starts_with('+') {
+                            DiffLineType::Added
+                        } else if line.starts_with('-') {
+                            DiffLineType::Removed
+                        } else if line.starts_with(' ') {
+                            DiffLineType::Context
+                        } else {
+                            DiffLineType::Other
+                        };
+
+                        // Track current file for syntax detection
+                        if line.starts_with("+++ b/") {
+                            current_file = Some(line[6..].to_string());
+                            // Create highlighter for this file type
+                            if let Some(ref path) = current_file {
+                                if let Some(syntax) = PS.find_syntax_for_file(path).ok().flatten() {
+                                    highlighter = Some(HighlightLines::new(syntax, theme));
+                                } else {
+                                    highlighter = None;
+                                }
+                            }
+                        }
+
+                        // Compute styled spans for content lines
+                        let styled_spans = if matches!(line_type, DiffLineType::Added | DiffLineType::Removed | DiffLineType::Context) {
+                            // Strip the leading +/- or space for highlighting
+                            let code_content = if line.len() > 1 { &line[1..] } else { "" };
+
+                            if let Some(ref mut hl) = highlighter {
+                                // Use syntax highlighting
+                                if let Ok(ranges) = hl.highlight_line(code_content, &PS) {
+                                    ranges.iter().map(|(style, text)| {
+                                        let color = syntect_to_ratatui_color(style.foreground);
+                                        (color, text.to_string())
+                                    }).collect()
+                                } else {
+                                    vec![(Color::White, code_content.to_string())]
+                                }
+                            } else {
+                                vec![(Color::White, code_content.to_string())]
+                            }
+                        } else {
+                            // Headers/hunks - no syntax highlighting needed
+                            vec![]
+                        };
+
+                        StyledDiffLine {
+                            line_type,
+                            content: line.to_string(),
+                            styled_spans,
+                        }
+                    })
+                    .collect();
+
+                let diff_line_count = diff_lines.len();
+
+                self.modal = Some(ModalContent::Commit {
+                    hash: commit,
+                    node_title: node.title.clone(),
+                    commit_message,
+                    diff_lines,
+                    files,
+                });
+                self.modal_scroll = ModalScroll::default();
+                self.commit_modal = CommitModalState {
+                    section: ModalSection::Top,
+                    diff_scroll: 0,
+                    diff_total_lines: diff_line_count,
+                };
+                self.focus = Focus::Modal;
+            } else {
+                self.set_status("No commit associated with this node".to_string());
+            }
+        }
+    }
+
+    /// Close the modal
+    pub fn close_modal(&mut self) {
+        self.modal = None;
+        self.modal_scroll = ModalScroll::default();
+        self.focus = Focus::List;
+    }
+
+    /// Scroll modal up
+    pub fn modal_scroll_up(&mut self, amount: usize) {
+        self.modal_scroll.offset = self.modal_scroll.offset.saturating_sub(amount);
+    }
+
+    /// Scroll modal down
+    pub fn modal_scroll_down(&mut self, amount: usize) {
+        let max_scroll = self.modal_scroll.total_lines.saturating_sub(10); // Leave some visible
+        self.modal_scroll.offset = (self.modal_scroll.offset + amount).min(max_scroll);
+    }
+
+    /// Navigate commit modal - move focus or scroll within section
+    pub fn commit_modal_down(&mut self, amount: usize) {
+        match self.commit_modal.section {
+            ModalSection::Top => {
+                // Move from top to bottom section
+                self.commit_modal.section = ModalSection::Bottom;
+            }
+            ModalSection::Bottom => {
+                // Scroll the diff section
+                let max_scroll = self.commit_modal.diff_total_lines.saturating_sub(10);
+                self.commit_modal.diff_scroll = (self.commit_modal.diff_scroll + amount).min(max_scroll);
+            }
+        }
+    }
+
+    /// Navigate commit modal up - scroll or move focus
+    pub fn commit_modal_up(&mut self, amount: usize) {
+        match self.commit_modal.section {
+            ModalSection::Top => {
+                // Already at top, do nothing
+            }
+            ModalSection::Bottom => {
+                if self.commit_modal.diff_scroll == 0 {
+                    // At top of diff, move focus back to top section
+                    self.commit_modal.section = ModalSection::Top;
+                } else {
+                    // Scroll diff up
+                    self.commit_modal.diff_scroll = self.commit_modal.diff_scroll.saturating_sub(amount);
+                }
+            }
+        }
+    }
+
+    /// Page down in commit modal diff section
+    pub fn commit_modal_page_down(&mut self, amount: usize) {
+        self.commit_modal.section = ModalSection::Bottom;
+        let max_scroll = self.commit_modal.diff_total_lines.saturating_sub(10);
+        self.commit_modal.diff_scroll = (self.commit_modal.diff_scroll + amount).min(max_scroll);
+    }
+
+    /// Page up in commit modal diff section
+    pub fn commit_modal_page_up(&mut self, amount: usize) {
+        self.commit_modal.diff_scroll = self.commit_modal.diff_scroll.saturating_sub(amount);
+        if self.commit_modal.diff_scroll == 0 {
+            self.commit_modal.section = ModalSection::Top;
+        }
+    }
+
+    /// Jump to top of commit modal
+    pub fn commit_modal_top(&mut self) {
+        self.commit_modal.section = ModalSection::Top;
+        self.commit_modal.diff_scroll = 0;
+    }
+
+    /// Jump to bottom of commit modal diff
+    pub fn commit_modal_bottom(&mut self) {
+        self.commit_modal.section = ModalSection::Bottom;
+        self.commit_modal.diff_scroll = self.commit_modal.diff_total_lines.saturating_sub(10);
+    }
+
+    /// Get the current file path from modal (if it's a file modal)
+    pub fn get_modal_file_path(&self) -> Option<String> {
+        match &self.modal {
+            Some(ModalContent::FilePreview { path, .. }) => Some(path.clone()),
+            Some(ModalContent::FileDiff { path, .. }) => Some(path.clone()),
+            _ => None,
+        }
+    }
+
+    /// Open the file shown in the current modal
+    pub fn open_modal_file(&mut self) {
+        if let Some(path) = self.get_modal_file_path() {
+            self.pending_editor_files = Some(vec![path]);
+        }
+    }
+
+    /// Get unique branches from the graph
+    pub fn get_unique_branches(&self) -> Vec<String> {
+        types::get_unique_branches(&self.graph.nodes)
+    }
+
+    /// Cycle through branch filters
+    pub fn cycle_branch_filter(&mut self) {
+        let branches = self.get_unique_branches();
+        if branches.is_empty() {
+            self.set_status("No branches found".to_string());
+            return;
+        }
+
+        self.branch_filter = match &self.branch_filter {
+            None => Some(branches[0].clone()),
+            Some(current) => {
+                let idx = branches.iter().position(|b| b == current);
+                match idx {
+                    Some(i) if i + 1 < branches.len() => Some(branches[i + 1].clone()),
+                    _ => None, // Cycle back to "all"
+                }
+            }
+        };
+
+        if let Some(ref branch) = self.branch_filter {
+            self.set_status(format!("Filter: {}", branch));
+        } else {
+            self.set_status("Filter: All branches".to_string());
+        }
+
+        self.apply_filters();
+    }
+
+    /// Enter branch search mode
+    pub fn enter_branch_search(&mut self) {
+        self.mode = Mode::BranchSearch;
+        self.branch_search_query.clear();
+        self.branch_search_matches = self.get_unique_branches();
+        self.branch_search_index = 0;
+    }
+
+    /// Update branch search matches based on query
+    pub fn update_branch_search(&mut self) {
+        let all_branches = self.get_unique_branches();
+        let query = self.branch_search_query.to_lowercase();
+
+        if query.is_empty() {
+            self.branch_search_matches = all_branches;
+        } else {
+            self.branch_search_matches = all_branches
+                .into_iter()
+                .filter(|b| b.to_lowercase().contains(&query))
+                .collect();
+        }
+        self.branch_search_index = 0;
+    }
+
+    /// Select the current branch from search results
+    pub fn select_branch_from_search(&mut self) {
+        if !self.branch_search_matches.is_empty() {
+            let selected = self.branch_search_matches[self.branch_search_index].clone();
+            self.branch_filter = Some(selected.clone());
+            self.apply_filters();
+            self.set_status(format!("Branch filter: {}", selected));
+        }
+        self.mode = Mode::Normal;
+        self.branch_search_query.clear();
+    }
+
+    /// Move to next match in branch search
+    pub fn branch_search_next(&mut self) {
+        if !self.branch_search_matches.is_empty() {
+            self.branch_search_index = (self.branch_search_index + 1) % self.branch_search_matches.len();
+        }
+    }
+
+    /// Move to previous match in branch search
+    pub fn branch_search_prev(&mut self) {
+        if !self.branch_search_matches.is_empty() {
+            if self.branch_search_index == 0 {
+                self.branch_search_index = self.branch_search_matches.len() - 1;
+            } else {
+                self.branch_search_index -= 1;
+            }
+        }
+    }
+
+    /// Show story for selected goal (or find parent goal if on another node type)
+    pub fn show_goal_story(&mut self) {
+        if let Some(node) = self.selected_node() {
+            if node.node_type == "goal" {
+                self.modal = Some(ModalContent::GoalStory { goal_id: node.id });
+                self.focus = Focus::Modal;
+            } else {
+                // Try to find the root goal by traversing up
+                if let Some(goal_id) = self.find_root_goal(node.id) {
+                    self.modal = Some(ModalContent::GoalStory { goal_id });
+                    self.focus = Focus::Modal;
+                } else {
+                    self.set_status("No parent goal found for this node".to_string());
+                }
+            }
+        }
+    }
+
+    /// Find the root goal by traversing incoming edges
+    pub fn find_root_goal(&self, start_id: i32) -> Option<i32> {
+        let mut visited = std::collections::HashSet::new();
+        let mut current = start_id;
+
+        loop {
+            if visited.contains(&current) {
+                return None; // Cycle detected
+            }
+            visited.insert(current);
+
+            // Check if current node is a goal
+            if let Some(node) = self.get_node_by_id(current) {
+                if node.node_type == "goal" {
+                    return Some(current);
+                }
+            }
+
+            // Find incoming edges to traverse up
+            let incoming: Vec<_> = self.graph.edges.iter()
+                .filter(|e| e.to_node_id == current)
+                .collect();
+
+            if incoming.is_empty() {
+                return None; // No parent
+            }
+
+            // Take the first incoming edge (could be smarter about this)
+            current = incoming[0].from_node_id;
+        }
+    }
+
+    /// Get all descendant nodes from a goal (BFS traversal)
+    pub fn get_goal_descendants(&self, goal_id: i32) -> Vec<(i32, &DecisionNode, usize)> {
+        let mut result = Vec::new();
+        let mut queue = std::collections::VecDeque::new();
+        let mut visited = std::collections::HashSet::new();
+
+        // Start with the goal itself at depth 0
+        queue.push_back((goal_id, 0usize));
+
+        while let Some((node_id, depth)) = queue.pop_front() {
+            if visited.contains(&node_id) {
+                continue;
+            }
+            visited.insert(node_id);
+
+            if let Some(node) = self.get_node_by_id(node_id) {
+                result.push((node_id, node, depth));
+
+                // Add all children (outgoing edges)
+                for edge in &self.graph.edges {
+                    if edge.from_node_id == node_id && !visited.contains(&edge.to_node_id) {
+                        queue.push_back((edge.to_node_id, depth + 1));
+                    }
+                }
+            }
+        }
+
+        result
+    }
+
+    /// Get all goals in the graph
+    pub fn get_goals(&self) -> Vec<&DecisionNode> {
+        self.graph.nodes.iter().filter(|n| n.node_type == "goal").collect()
+    }
+
+    /// Get files for currently selected node
+    pub fn get_current_files(&self) -> Vec<String> {
+        self.selected_node()
+            .map(|n| types::get_files(n))
+            .unwrap_or_default()
+    }
+
+    /// Toggle file browser mode in detail panel
+    pub fn toggle_file_browser(&mut self) {
+        let files = self.get_current_files();
+        if files.is_empty() {
+            self.set_status("No files for this node".to_string());
+            return;
+        }
+        self.detail_in_files = !self.detail_in_files;
+        if self.detail_in_files {
+            self.detail_file_index = 0;
+            self.set_status(format!("File browser: {}/{}", 1, files.len()));
+        }
+    }
+
+    /// Move to next file in detail panel
+    pub fn next_file(&mut self) {
+        let files = self.get_current_files();
+        if !files.is_empty() && self.detail_file_index + 1 < files.len() {
+            self.detail_file_index += 1;
+            self.set_status(format!("File {}/{}: {}", self.detail_file_index + 1, files.len(), files[self.detail_file_index]));
+        }
+    }
+
+    /// Move to previous file in detail panel
+    pub fn prev_file(&mut self) {
+        if self.detail_file_index > 0 {
+            self.detail_file_index -= 1;
+            let files = self.get_current_files();
+            self.set_status(format!("File {}/{}: {}", self.detail_file_index + 1, files.len(), files[self.detail_file_index]));
+        }
+    }
+
+    /// Show file preview modal
+    pub fn show_file_preview(&mut self) {
+        let files = self.get_current_files();
+        if files.is_empty() {
+            self.set_status("No files for this node".to_string());
+            return;
+        }
+
+        let path = &files[self.detail_file_index.min(files.len() - 1)];
+
+        // Read raw file content - UI will handle formatting and syntax highlighting
+        let content = std::fs::read_to_string(path)
+            .unwrap_or_else(|e| format!("Error reading file: {}", e));
+
+        self.modal = Some(ModalContent::FilePreview {
+            path: path.clone(),
+            content,
+        });
+        self.modal_scroll = ModalScroll::default();
+        self.focus = Focus::Modal;
+    }
+
+    /// Show file diff modal
+    pub fn show_file_diff(&mut self) {
+        let files = self.get_current_files();
+        if files.is_empty() {
+            self.set_status("No files for this node".to_string());
+            return;
+        }
+
+        let path = &files[self.detail_file_index.min(files.len() - 1)];
+
+        // Get git diff for this file
+        let diff = std::process::Command::new("git")
+            .args(["diff", "HEAD~5..HEAD", "--", path])
+            .output()
+            .map(|o| {
+                let stdout = String::from_utf8_lossy(&o.stdout);
+                if stdout.is_empty() {
+                    "No recent changes to this file".to_string()
+                } else {
+                    stdout.to_string()
+                }
+            })
+            .unwrap_or_else(|e| format!("Error running git diff: {}", e));
+
+        self.modal = Some(ModalContent::FileDiff {
+            path: path.clone(),
+            diff,
+        });
+        self.focus = Focus::Modal;
+    }
+
+    /// Open currently selected file in editor
+    pub fn open_current_file(&mut self) {
+        let files = self.get_current_files();
+        if files.is_empty() {
+            self.set_status("No files for this node".to_string());
+            return;
+        }
+
+        let path = files[self.detail_file_index.min(files.len() - 1)].clone();
+        self.open_files(vec![path]);
     }
 }
