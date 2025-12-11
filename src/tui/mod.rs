@@ -39,6 +39,25 @@ pub fn run(db_path: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
+    // Run the app, ensuring cleanup happens even on error
+    let result = run_app_inner(&mut terminal, db_path);
+
+    // Restore terminal - this MUST run even if app fails
+    let _ = disable_raw_mode();
+    let _ = execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    );
+    let _ = terminal.show_cursor();
+
+    result
+}
+
+fn run_app_inner<B: Backend>(
+    terminal: &mut Terminal<B>,
+    db_path: Option<PathBuf>,
+) -> Result<(), Box<dyn std::error::Error>> {
     // Create app state
     let mut app = App::new(db_path)?;
 
@@ -61,21 +80,10 @@ pub fn run(db_path: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
     watcher.watch(&db_path_for_watcher, RecursiveMode::NonRecursive)?;
 
     // Run the main loop
-    let result = run_app(&mut terminal, &mut app, rx);
-
-    // Restore terminal
-    disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
-    terminal.show_cursor()?;
-
-    result
+    run_event_loop(terminal, &mut app, rx)
 }
 
-fn run_app<B: Backend>(
+fn run_event_loop<B: Backend>(
     terminal: &mut Terminal<B>,
     app: &mut App,
     file_change_rx: mpsc::Receiver<()>,
