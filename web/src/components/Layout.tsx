@@ -20,10 +20,10 @@ interface LayoutProps {
 type ViewTab = 'chains' | 'timeline' | 'graph' | 'dag';
 
 const TABS: { id: ViewTab; label: string; path: string }[] = [
-  { id: 'chains', label: 'Chains', path: '/' },
+  { id: 'dag', label: 'DAG', path: '/' },
+  { id: 'chains', label: 'Chains', path: '/chains' },
   { id: 'timeline', label: 'Timeline', path: '/timeline' },
   { id: 'graph', label: 'Graph', path: '/graph' },
-  { id: 'dag', label: 'DAG', path: '/dag' },
 ];
 
 export const Layout: React.FC<LayoutProps> = ({ children, stats, lastUpdated, branches, selectedBranch, onBranchChange }) => {
@@ -31,10 +31,10 @@ export const Layout: React.FC<LayoutProps> = ({ children, stats, lastUpdated, br
 
   const getCurrentTab = (): ViewTab => {
     const path = location.pathname;
+    if (path === '/chains') return 'chains';
     if (path === '/timeline') return 'timeline';
     if (path === '/graph') return 'graph';
-    if (path === '/dag') return 'dag';
-    return 'chains';
+    return 'dag'; // Default to DAG
   };
 
   const currentTab = getCurrentTab();
