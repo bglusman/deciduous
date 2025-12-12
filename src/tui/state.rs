@@ -282,11 +282,13 @@ pub fn cycle_branch_filter(current: Option<&str>, branches: &[String]) -> Option
 /// Calculate scroll offset for modal (clamped to valid range)
 pub fn scroll_modal(current: usize, delta: isize, total_lines: usize, visible: usize) -> usize {
     let max_scroll = total_lines.saturating_sub(visible);
-    if delta >= 0 {
-        (current + delta as usize).min(max_scroll)
+    let new_offset = if delta >= 0 {
+        current.saturating_add(delta as usize)
     } else {
         current.saturating_sub((-delta) as usize)
-    }
+    };
+    // Always clamp to valid range
+    new_offset.min(max_scroll)
 }
 
 // =============================================================================
@@ -521,5 +523,186 @@ mod tests {
         assert_eq!(scroll_modal(75, 10, 100, 20), 80);
         // Clamp to 0
         assert_eq!(scroll_modal(3, -10, 100, 20), 0);
+    }
+}
+
+// =============================================================================
+// Property-Based Tests (Proptest)
+// =============================================================================
+
+#[cfg(test)]
+mod proptests {
+    use super::*;
+    use proptest::prelude::*;
+
+    // Strategy to generate valid node IDs (positive i32)
+    fn node_id() -> impl Strategy<Value = i32> {
+        1..=1000i32
+    }
+
+    // Strategy to generate list sizes
+    fn list_len() -> impl Strategy<Value = usize> {
+        0..=100usize
+    }
+
+    // Strategy for selection index and max value
+    fn index_and_max() -> impl Strategy<Value = (usize, usize)> {
+        (0..=1000usize).prop_flat_map(|max| (0..=max, Just(max)))
+    }
+
+    proptest! {
+        // === Navigation Property Tests ===
+
+        #[test]
+        fn prop_move_up_never_underflows(current in 0..=1000usize) {
+            let result = move_selection_up(current);
+            // Result should always be <= current
+            prop_assert!(result <= current);
+            // Result should never be negative (implicit due to usize)
+        }
+
+        #[test]
+        fn prop_move_down_never_overflows((current, max) in index_and_max()) {
+            let result = move_selection_down(current, max);
+            // Result should always be <= max
+            prop_assert!(result <= max);
+            // Result should always be >= current (or equal if at max)
+            prop_assert!(result >= current || current >= max);
+        }
+
+        #[test]
+        fn prop_clamp_selection_always_valid(current in 0..=1000usize, len in 0..=1000usize) {
+            let result = clamp_selection(current, len);
+            if len == 0 {
+                prop_assert_eq!(result, 0);
+            } else {
+                prop_assert!(result < len, "result {} should be < len {}", result, len);
+            }
+        }
+
+        #[test]
+        fn prop_page_navigation_bounded(
+            current in 0..=1000usize,
+            visible in 1..=100usize,
+            total in 0..=1000usize
+        ) {
+            let down = page_down(current, visible, total);
+            let up = page_up(current, visible);
+
+            // Page down should not exceed total - 1 (if total > 0)
+            if total > 0 {
+                prop_assert!(down < total, "page_down {} should be < total {}", down, total);
+            }
+
+            // Page up should always be <= current
+            prop_assert!(up <= current, "page_up {} should be <= current {}", up, current);
+        }
+
+        // === Modal Scroll Property Tests ===
+
+        #[test]
+        fn prop_scroll_modal_bounded(
+            current in 0..=1000usize,
+            delta in -100..=100isize,
+            total_lines in 1..=1000usize,
+            viewport_height in 1..=100usize
+        ) {
+            let result = scroll_modal(current, delta, total_lines, viewport_height);
+
+            // Result should never be negative (implicit due to usize)
+            // Result should not exceed max_scroll
+            let max_scroll = total_lines.saturating_sub(viewport_height);
+            prop_assert!(result <= max_scroll,
+                "scroll result {} should be <= max_scroll {}", result, max_scroll);
+        }
+
+        // === Filter Property Tests ===
+
+        #[test]
+        fn prop_filter_by_type_subset(node_count in 0..=50usize) {
+            // Create test nodes
+            let nodes: Vec<DecisionNode> = (0..node_count)
+                .map(|i| DecisionNode {
+                    id: i as i32,
+                    node_type: if i % 3 == 0 { "goal" } else { "action" }.to_string(),
+                    title: format!("Node {}", i),
+                    description: None,
+                    status: "pending".to_string(),
+                    created_at: "2024-01-01".to_string(),
+                    updated_at: "2024-01-01".to_string(),
+                    metadata_json: None,
+                    change_id: format!("change-{}", i),
+                })
+                .collect();
+
+            let filtered = filter_by_type(&nodes, Some("goal"));
+
+            // Filtered should be a subset
+            prop_assert!(filtered.len() <= nodes.len());
+
+            // All filtered nodes should match the type
+            for node in &filtered {
+                prop_assert_eq!(&node.node_type, "goal");
+            }
+        }
+
+        #[test]
+        fn prop_filter_none_returns_all(node_count in 0..=50usize) {
+            let nodes: Vec<DecisionNode> = (0..node_count)
+                .map(|i| DecisionNode {
+                    id: i as i32,
+                    node_type: "action".to_string(),
+                    title: format!("Node {}", i),
+                    description: None,
+                    status: "pending".to_string(),
+                    created_at: "2024-01-01".to_string(),
+                    updated_at: "2024-01-01".to_string(),
+                    metadata_json: None,
+                    change_id: format!("change-{}", i),
+                })
+                .collect();
+
+            let filtered = filter_by_type(&nodes, None);
+            prop_assert_eq!(filtered.len(), nodes.len());
+        }
+
+        #[test]
+        fn prop_sort_preserves_length(node_count in 0..=50usize, reverse in proptest::bool::ANY) {
+            let nodes: Vec<DecisionNode> = (0..node_count)
+                .map(|i| DecisionNode {
+                    id: i as i32,
+                    node_type: "action".to_string(),
+                    title: format!("Node {}", i),
+                    description: None,
+                    status: "pending".to_string(),
+                    created_at: format!("2024-01-{:02}", (i % 28) + 1),
+                    updated_at: "2024-01-01".to_string(),
+                    metadata_json: None,
+                    change_id: format!("change-{}", i),
+                })
+                .collect();
+
+            let sorted = sort_by_time(&nodes, reverse);
+            prop_assert_eq!(sorted.len(), nodes.len());
+        }
+
+        // === Type Cycling Property Tests ===
+
+        #[test]
+        fn prop_cycle_type_filter_cycles(iterations in 1..=20usize) {
+            let mut current: Option<String> = None;
+            let mut seen_none = false;
+
+            for _ in 0..iterations {
+                current = cycle_type_filter(current.as_deref());
+                if current.is_none() {
+                    seen_none = true;
+                }
+            }
+
+            // After enough iterations, we should cycle back to None
+            prop_assert!(seen_none || iterations < 7,
+                "Should cycle through all types and back to None");
+        }
     }
 }

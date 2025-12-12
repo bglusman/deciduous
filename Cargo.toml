@@ -81,5 +81,6 @@ codegen-units = 1
 strip = true
 
 [dev-dependencies]
+proptest = "1.7.0"
 serde_yaml = "0.9.34"
 tempfile = "3.23.0"
