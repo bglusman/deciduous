@@ -163,6 +163,37 @@
         .node-type.outcome h3 { color: #1f6feb; }
         .node-type.observation h3 { color: #bf3989; }
 
+        .demo-section {
+            margin-top: 50px;
+            padding-top: 30px;
+            border-top: 1px solid #d0d7de;
+        }
+        .demo-section h2 {
+            border: none;
+            padding-bottom: 0;
+            margin-bottom: 20px;
+        }
+        .demo-section p {
+            color: #57606a;
+            margin-bottom: 20px;
+        }
+        .demo-player-container {
+            position: relative;
+            width: 100vw;
+            left: calc(-50vw + 50%);
+            background: #1e1e1e;
+            padding: 20px 0;
+        }
+        .demo-player-container iframe {
+            display: block;
+            width: 90vw;
+            max-width: 1400px;
+            height: 70vh;
+            min-height: 500px;
+            margin: 0 auto;
+            border: 0;
+        }
+
         .workflow-section {
             margin-top: 50px;
             padding-top: 30px;
@@ -286,6 +317,19 @@
             </div>
         </section>
 
+        <section class="demo-section">
+            <h2>See It In Action</h2>
+            <p>Watch a full session building with deciduous: initialization, decision logging, graph visualization, and context recovery.</p>
+            <div class="demo-player-container">
+                <iframe src="https://asciinema.org/a/761574/iframe?speed=1.4&idleTimeLimit=2&theme=asciinema&preload=1&fit=width"
+                    id="asciicast-iframe-761574"
+                    name="asciicast-iframe-761574"
+                    scrolling="no"
+                    allowfullscreen="true">
+                </iframe>
+            </div>
+        </section>
+
         <section class="workflow-section">
             <h2>The Workflow</h2>
             <div class="workflow">
@@ -317,5 +361,6 @@ SESSION END -> Graph survives
             MIT License
         </footer>
     </div>
+
 </body>
 </html>
