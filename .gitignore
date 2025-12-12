@@ -41,3 +41,9 @@ web/node_modules/
 # Database
 deciduous.db
 *.db
+
+# Deciduous database (local)
+.deciduous/
+
+# Proptest regressions (local test failures)
+proptest-regressions/
