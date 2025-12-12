@@ -12,6 +12,7 @@ use std::path::Path;
 pub enum Editor {
     Claude,
     Windsurf,
+    Opencode,
 }
 
 /// Static HTML viewer for GitHub Pages (embedded at compile time)
@@ -1175,6 +1176,417 @@ deciduous diff apply --dry-run .deciduous/patches/teammate.json
 PR workflow: Export patch → commit patch file → PR → teammates apply.
 "#;
 
+// ============================================================================
+// OPENCODE-SPECIFIC TEMPLATES
+// ============================================================================
+
+/// OpenCode decision command - placed in .opencode/command/decision.md
+/// Note: OpenCode uses simpler frontmatter than Claude (just description)
+const OPENCODE_DECISION_CMD: &str = r#"---
+description: "Manage decision graph - track choices and reasoning. Usage: /decision <action> [args...]"
+---
+
+# Decision Graph Management
+
+**Log decisions IN REAL-TIME as you work, not retroactively.**
+
+## When to Use This
+
+| You're doing this... | Log this type | Command |
+|---------------------|---------------|---------|
+| Starting a new feature | `goal` **with -p** | `/decision add goal "Add user auth" -p "user request"` |
+| Choosing between approaches | `decision` | `/decision add decision "Choose auth method"` |
+| Considering an option | `option` | `/decision add option "JWT tokens"` |
+| About to write code | `action` | `/decision add action "Implementing JWT"` |
+| Noticing something | `observation` | `/decision add obs "Found existing auth code"` |
+| Finished something | `outcome` | `/decision add outcome "JWT working"` |
+
+## Quick Commands
+
+Based on $ARGUMENTS:
+
+### View Commands
+- `nodes` or `list` -> `deciduous nodes`
+- `edges` -> `deciduous edges`
+- `graph` -> `deciduous graph`
+- `commands` -> `deciduous commands`
+
+### Create Nodes (with optional metadata)
+- `add goal <title>` -> `deciduous add goal "<title>" -c 90`
+- `add decision <title>` -> `deciduous add decision "<title>" -c 75`
+- `add option <title>` -> `deciduous add option "<title>" -c 70`
+- `add action <title>` -> `deciduous add action "<title>" -c 85`
+- `add obs <title>` -> `deciduous add observation "<title>" -c 80`
+- `add outcome <title>` -> `deciduous add outcome "<title>" -c 90`
+
+### Optional Flags for Nodes
+- `-c, --confidence <0-100>` - Confidence level
+- `-p, --prompt "..."` - Store the user prompt that triggered this node
+- `-f, --files "file1.rs,file2.rs"` - Associate files with this node
+- `-b, --branch <name>` - Git branch (auto-detected by default)
+- `--no-branch` - Skip branch auto-detection
+- `--commit <hash|HEAD>` - Link to a git commit (use HEAD for current commit)
+
+### CRITICAL: Link Commits to Actions/Outcomes
+
+**After every git commit, link it to the decision graph!**
+
+```bash
+git commit -m "feat: add auth"
+deciduous add action "Implemented auth" -c 90 --commit HEAD
+deciduous link <goal_id> <action_id> -r "Implementation"
+```
+
+## CRITICAL: Capture User Prompts When Semantically Meaningful
+
+**Use `-p` / `--prompt` when a user request triggers new work or changes direction.** Don't add prompts to every node - only when a prompt is the actual catalyst.
+
+```bash
+# New feature request - capture the prompt on the goal
+deciduous add goal "Add auth" -c 90 -p "User asked: add login to the app"
+
+# Downstream work links back - no prompt needed (it flows via edges)
+deciduous add decision "Choose auth method" -c 75
+deciduous link <goal_id> <decision_id> -r "Deciding approach"
+
+# BUT if the user gives new direction mid-stream, capture that too
+deciduous add action "Switch to OAuth" -c 85 -p "User said: use OAuth instead"
+```
+
+**When to capture prompts:**
+- Root `goal` nodes: YES - the original request
+- Major direction changes: YES - when user redirects the work
+- Routine downstream nodes: NO - they inherit context via edges
+
+### Create Edges
+- `link <from> <to> [reason]` -> `deciduous link <from> <to> -r "<reason>"`
+
+### Sync Graph
+- `sync` -> `deciduous sync`
+
+### Multi-User Sync (Diff/Patch)
+- `diff export -o <file>` -> `deciduous diff export -o <file>`
+- `diff export --nodes 1-10 -o <file>` -> export specific nodes
+- `diff export --branch feature-x -o <file>` -> export nodes from branch
+- `diff apply <file>` -> `deciduous diff apply <file>` (idempotent)
+- `diff apply --dry-run <file>` -> preview without applying
+- `diff status` -> `deciduous diff status`
+
+### Export & Visualization
+- `dot` -> `deciduous dot`
+- `dot --png` -> `deciduous dot --png -o graph.dot`
+- `writeup` -> `deciduous writeup`
+- `writeup -t "Title" --nodes 1-11` -> filtered writeup
+
+## Node Types
+
+| Type | Purpose | Example |
+|------|---------|---------|
+| `goal` | High-level objective | "Add user authentication" |
+| `decision` | Choice point with options | "Choose auth method" |
+| `option` | Possible approach | "Use JWT tokens" |
+| `action` | Something implemented | "Added JWT middleware" |
+| `outcome` | Result of action | "JWT auth working" |
+| `observation` | Finding or data point | "Existing code uses sessions" |
+
+## Graph Integrity - CRITICAL
+
+**Every node MUST be logically connected.** Floating nodes break the graph's value.
+
+### Connection Rules
+| Node Type | MUST connect to |
+|-----------|----------------|
+| `outcome` | The action/goal it resolves |
+| `action` | The decision/goal that spawned it |
+| `option` | Its parent decision |
+| `observation` | Related goal/action/decision |
+| `decision` | Parent goal (if any) |
+| `goal` | Can be a root (no parent needed) |
+
+## The Rule
+
+```
+LOG BEFORE YOU CODE, NOT AFTER.
+CONNECT EVERY NODE TO ITS PARENT.
+AUDIT FOR ORPHANS REGULARLY.
+SYNC BEFORE YOU PUSH.
+```
+"#;
+
+/// OpenCode context command - placed in .opencode/command/context.md
+const OPENCODE_CONTEXT_CMD: &str = r#"---
+description: "Recover context from decision graph - USE THIS ON SESSION START. Usage: /context [focus-area]"
+---
+
+# Context Recovery
+
+**RUN THIS AT SESSION START.** The decision graph is your persistent memory.
+
+## Step 1: Query the Graph
+
+```bash
+# See all decisions (look for recent ones and pending status)
+deciduous nodes
+
+# Filter by current branch (useful for feature work)
+deciduous nodes --branch $(git rev-parse --abbrev-ref HEAD)
+
+# See how decisions connect
+deciduous edges
+
+# What commands were recently run?
+deciduous commands
+```
+
+**Branch-scoped context**: If working on a feature branch, filter nodes to see only decisions relevant to this branch.
+
+## Step 1.5: Audit Graph Integrity
+
+**CRITICAL: Check that all nodes are logically connected.**
+
+```bash
+# Find nodes with no incoming edges (potential missing connections)
+deciduous edges | cut -d'>' -f2 | cut -d' ' -f2 | sort -u > /tmp/has_parent.txt
+deciduous nodes | tail -n+3 | awk '{print $1}' | while read id; do
+  grep -q "^$id$" /tmp/has_parent.txt || echo "CHECK: $id"
+done
+```
+
+**Review each flagged node:**
+- Root `goal` nodes are VALID without parents
+- `outcome` nodes MUST link back to their action/goal
+- `action` nodes MUST link to their parent goal/decision
+- `option` nodes MUST link to their parent decision
+
+**Fix missing connections:**
+```bash
+deciduous link <parent_id> <child_id> -r "Retroactive connection - <reason>"
+```
+
+## Step 2: Check Git State
+
+```bash
+git status
+git log --oneline -10
+git diff --stat
+```
+
+## After Gathering Context, Report:
+
+1. **Current branch** and pending changes
+2. **Branch-specific decisions** (filter by branch if on feature branch)
+3. **Recent decisions** (especially pending/active ones)
+4. **Last actions** from git log and command log
+5. **Open questions** or unresolved observations
+6. **Suggested next steps**
+
+---
+
+## REMEMBER: Real-Time Logging Required
+
+After recovering context, you MUST follow the logging workflow:
+
+```
+EVERY USER REQUEST -> Log goal/decision first
+BEFORE CODE CHANGES -> Log action
+AFTER CHANGES -> Log outcome, link nodes
+BEFORE GIT PUSH -> deciduous sync
+```
+
+**The user is watching the graph live.** Log as you go, not after.
+
+### Quick Logging Commands
+
+```bash
+# Root goal with user prompt (capture what the user asked for)
+deciduous add goal "What we're trying to do" -c 90 -p "User asked: <their request>"
+
+deciduous add action "What I'm about to implement" -c 85
+deciduous add outcome "What happened" -c 95
+deciduous link FROM TO -r "Connection reason"
+
+deciduous sync  # Do this frequently!
+```
+
+---
+
+## Focus Areas
+
+If $ARGUMENTS specifies a focus, prioritize context for:
+
+- **auth**: Authentication-related decisions
+- **ui** / **graph**: UI and graph viewer state
+- **cli**: Command-line interface changes
+- **api**: API endpoints and data structures
+
+---
+
+## The Memory Loop
+
+```
+SESSION START
+    |
+Run /context -> See past decisions
+    |
+AUDIT -> Fix any orphan nodes first!
+    |
+DO WORK -> Log BEFORE each action
+    |
+CONNECT -> Link new nodes immediately
+    |
+AFTER CHANGES -> Log outcomes, observations
+    |
+AUDIT AGAIN -> Any new orphans?
+    |
+BEFORE PUSH -> deciduous sync
+    |
+PUSH -> Live graph updates
+    |
+SESSION END -> Final audit
+    |
+(repeat)
+```
+
+---
+
+## Multi-User Sync
+
+If working in a team, check for and apply patches from teammates:
+
+```bash
+# Check for unapplied patches
+deciduous diff status
+
+# Apply all patches (idempotent - safe to run multiple times)
+deciduous diff apply .deciduous/patches/*.json
+
+# Preview before applying
+deciduous diff apply --dry-run .deciduous/patches/teammate-feature.json
+```
+
+Before pushing your branch, export your decisions for teammates:
+
+```bash
+# Export your branch's decisions as a patch
+deciduous diff export --branch $(git rev-parse --abbrev-ref HEAD) \
+  -o .deciduous/patches/$(whoami)-$(git rev-parse --abbrev-ref HEAD).json
+
+# Commit the patch file
+git add .deciduous/patches/
+```
+
+## Why This Matters
+
+- Context loss during compaction loses your reasoning
+- The graph survives - query it early, query it often
+- Retroactive logging misses details - log in the moment
+- The user sees the graph live - show your work
+"#;
+
+/// OpenCode build-test command
+const OPENCODE_BUILD_TEST_CMD: &str = r#"---
+description: "Build the project and run the test suite"
+---
+
+# Build and Test
+
+Build the project and run the test suite.
+
+## Instructions
+
+1. Run the full build and test cycle:
+   ```bash
+   cargo build --release && cargo test
+   ```
+
+2. If tests fail, analyze the failures and explain:
+   - Which test failed
+   - What it was testing
+   - Likely cause of failure
+   - Suggested fix
+
+3. If all tests pass, report success and any warnings from the build.
+
+4. If the user specifies a specific test pattern, run only those tests:
+   ```bash
+   cargo test <pattern>
+   ```
+
+## Test categories in this project
+- `test_public_exports` - API verification
+- `test_filter_graph` - Graph filtering
+- `test_extract_commit` - Commit extraction from metadata
+- `test_extract_confidence` - Confidence extraction from metadata
+- `test_graph_to_dot` - DOT export
+- `test_generate_writeup` - PR writeup generation
+
+$ARGUMENTS
+"#;
+
+/// OpenCode serve-ui command
+const OPENCODE_SERVE_UI_CMD: &str = r#"---
+description: "Launch the deciduous web server for viewing the decision graph"
+---
+
+# Start Decision Graph Viewer
+
+Launch the deciduous web server for viewing and navigating the decision graph.
+
+## Instructions
+
+1. Start the server:
+   ```bash
+   deciduous serve --port 3000
+   ```
+
+2. Inform the user:
+   - The server is running at http://localhost:3000
+   - The graph auto-refreshes every 30 seconds
+   - They can browse decisions, chains, and timeline views
+   - Changes made via CLI will appear automatically
+
+3. The server will run in the foreground. Remind user to stop it when done (Ctrl+C).
+
+## UI Features
+- **Chains View**: See decision chains grouped by goals
+- **Timeline View**: Chronological view of all decisions
+- **Graph View**: Interactive force-directed graph
+- **DAG View**: Directed acyclic graph visualization
+- **Detail Panel**: Click any node to see full details including:
+  - Node metadata (confidence, commit, prompt, files)
+  - Connected nodes (incoming/outgoing edges)
+  - Timestamps and status
+
+## Alternative: Static Hosting
+
+For GitHub Pages or other static hosting:
+```bash
+deciduous sync  # Exports to docs/graph-data.json
+```
+
+Then push to GitHub - the graph is viewable at your GitHub Pages URL.
+
+$ARGUMENTS
+"#;
+
+/// OpenCode sync-graph command
+const OPENCODE_SYNC_GRAPH_CMD: &str = r#"---
+description: "Export the decision graph to docs/ for GitHub Pages"
+---
+
+# Sync Decision Graph to GitHub Pages
+
+Export the current decision graph to docs/graph-data.json so it's deployed to GitHub Pages.
+
+## Steps
+
+1. Run `deciduous sync` to export the graph
+2. Show the user how many nodes/edges were exported
+3. If there are changes, stage them: `git add docs/graph-data.json`
+
+This should be run before any push to main to ensure the live site has the latest decisions.
+"#;
+
 /// Initialize deciduous in the current directory
 pub fn init_project(editor: Editor) -> Result<(), String> {
     let cwd = std::env::current_dir()
@@ -1183,6 +1595,7 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
     let editor_name = match editor {
         Editor::Claude => "Claude Code",
         Editor::Windsurf => "Windsurf",
+        Editor::Opencode => "OpenCode",
     };
 
     println!("\n{}", format!("Initializing Deciduous for {}...", editor_name).cyan().bold());
@@ -1252,6 +1665,35 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
             let agents_md_path = cwd.join("AGENTS.md");
             append_config_md(&agents_md_path, AGENTS_MD_SECTION, "AGENTS.md")?;
         }
+        Editor::Opencode => {
+            // Create .opencode/command directory (note: singular "command", not "commands")
+            let opencode_cmd_dir = cwd.join(".opencode").join("command");
+            create_dir_if_missing(&opencode_cmd_dir)?;
+
+            // Write decision.md command
+            let decision_path = opencode_cmd_dir.join("decision.md");
+            write_file_if_missing(&decision_path, OPENCODE_DECISION_CMD, ".opencode/command/decision.md")?;
+
+            // Write context.md command
+            let context_path = opencode_cmd_dir.join("context.md");
+            write_file_if_missing(&context_path, OPENCODE_CONTEXT_CMD, ".opencode/command/context.md")?;
+
+            // Write build-test.md command
+            let build_test_path = opencode_cmd_dir.join("build-test.md");
+            write_file_if_missing(&build_test_path, OPENCODE_BUILD_TEST_CMD, ".opencode/command/build-test.md")?;
+
+            // Write serve-ui.md command
+            let serve_ui_path = opencode_cmd_dir.join("serve-ui.md");
+            write_file_if_missing(&serve_ui_path, OPENCODE_SERVE_UI_CMD, ".opencode/command/serve-ui.md")?;
+
+            // Write sync-graph.md command
+            let sync_graph_path = opencode_cmd_dir.join("sync-graph.md");
+            write_file_if_missing(&sync_graph_path, OPENCODE_SYNC_GRAPH_CMD, ".opencode/command/sync-graph.md")?;
+
+            // Append to or create AGENTS.md (OpenCode uses AGENTS.md like Windsurf)
+            let agents_md_path = cwd.join("AGENTS.md");
+            append_config_md(&agents_md_path, AGENTS_MD_SECTION, "AGENTS.md")?;
+        }
     }
 
     // 4. Add .deciduous to .gitignore if not already there
@@ -1315,6 +1757,15 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
             println!("{}", "  ⚠️  IMPORTANT: Verify rule activation in Windsurf:".yellow().bold());
             println!("     Open Windsurf → Cascade → Customizations (gear icon)");
             println!("     Ensure {} is set to {}", "deciduous.md".cyan(), "\"Always On\"".green());
+        }
+        Editor::Opencode => {
+            println!("  3. Commands created in {}", ".opencode/command/".cyan());
+            println!("     - {} (decision tracking)", "/decision".cyan());
+            println!("     - {} (context recovery)", "/context".cyan());
+            println!("     - {} (build & test)", "/build-test".cyan());
+            println!("     - {} (graph viewer)", "/serve-ui".cyan());
+            println!("     - {} (export graph)", "/sync-graph".cyan());
+            println!("  4. Instructions added to {}", "AGENTS.md".cyan());
         }
     }
 
@@ -1426,6 +1877,7 @@ pub fn update_tooling(editor: Editor) -> Result<(), String> {
     let editor_name = match editor {
         Editor::Claude => "Claude Code",
         Editor::Windsurf => "Windsurf",
+        Editor::Opencode => "OpenCode",
     };
 
     println!("\n{}", format!("Updating Deciduous tooling for {}...", editor_name).cyan().bold());
@@ -1476,6 +1928,35 @@ pub fn update_tooling(editor: Editor) -> Result<(), String> {
             // Overwrite memories.md
             let memories_path = windsurf_base.join("memories.md");
             write_file_overwrite(&memories_path, WINDSURF_MEMORIES, ".windsurf/memories.md")?;
+
+            // Update AGENTS.md section
+            let agents_md_path = cwd.join("AGENTS.md");
+            replace_config_md_section(&agents_md_path, AGENTS_MD_SECTION, "AGENTS.md")?;
+        }
+        Editor::Opencode => {
+            // Create .opencode/command directory if needed
+            let opencode_cmd_dir = cwd.join(".opencode").join("command");
+            create_dir_if_missing(&opencode_cmd_dir)?;
+
+            // Overwrite decision.md command
+            let decision_path = opencode_cmd_dir.join("decision.md");
+            write_file_overwrite(&decision_path, OPENCODE_DECISION_CMD, ".opencode/command/decision.md")?;
+
+            // Overwrite context.md command
+            let context_path = opencode_cmd_dir.join("context.md");
+            write_file_overwrite(&context_path, OPENCODE_CONTEXT_CMD, ".opencode/command/context.md")?;
+
+            // Overwrite build-test.md command
+            let build_test_path = opencode_cmd_dir.join("build-test.md");
+            write_file_overwrite(&build_test_path, OPENCODE_BUILD_TEST_CMD, ".opencode/command/build-test.md")?;
+
+            // Overwrite serve-ui.md command
+            let serve_ui_path = opencode_cmd_dir.join("serve-ui.md");
+            write_file_overwrite(&serve_ui_path, OPENCODE_SERVE_UI_CMD, ".opencode/command/serve-ui.md")?;
+
+            // Overwrite sync-graph.md command
+            let sync_graph_path = opencode_cmd_dir.join("sync-graph.md");
+            write_file_overwrite(&sync_graph_path, OPENCODE_SYNC_GRAPH_CMD, ".opencode/command/sync-graph.md")?;
 
             // Update AGENTS.md section
             let agents_md_path = cwd.join("AGENTS.md");
@@ -1562,13 +2043,17 @@ mod tests {
     fn test_editor_equality() {
         assert_eq!(Editor::Claude, Editor::Claude);
         assert_eq!(Editor::Windsurf, Editor::Windsurf);
+        assert_eq!(Editor::Opencode, Editor::Opencode);
         assert_ne!(Editor::Claude, Editor::Windsurf);
+        assert_ne!(Editor::Claude, Editor::Opencode);
+        assert_ne!(Editor::Windsurf, Editor::Opencode);
     }
 
     #[test]
     fn test_editor_debug() {
         assert_eq!(format!("{:?}", Editor::Claude), "Claude");
         assert_eq!(format!("{:?}", Editor::Windsurf), "Windsurf");
+        assert_eq!(format!("{:?}", Editor::Opencode), "Opencode");
     }
 
     // === Template Content Tests ===
@@ -1604,6 +2089,57 @@ mod tests {
     fn test_windsurf_rule_has_required_frontmatter() {
         assert!(WINDSURF_DECIDUOUS_RULE.starts_with("---"), "windsurf rule should start with frontmatter");
         assert!(WINDSURF_DECIDUOUS_RULE.contains("alwaysApply:"), "windsurf rule should have alwaysApply");
+    }
+
+    // === OpenCode Template Tests ===
+
+    #[test]
+    fn test_opencode_decision_cmd_has_required_frontmatter() {
+        assert!(OPENCODE_DECISION_CMD.starts_with("---"), "opencode decision cmd should start with frontmatter");
+        assert!(OPENCODE_DECISION_CMD.contains("description:"), "opencode decision cmd should have description");
+    }
+
+    #[test]
+    fn test_opencode_context_cmd_has_required_frontmatter() {
+        assert!(OPENCODE_CONTEXT_CMD.starts_with("---"), "opencode context cmd should start with frontmatter");
+        assert!(OPENCODE_CONTEXT_CMD.contains("description:"), "opencode context cmd should have description");
+    }
+
+    #[test]
+    fn test_opencode_decision_cmd_contains_workflow() {
+        assert!(OPENCODE_DECISION_CMD.contains("Decision Graph Management"));
+        assert!(OPENCODE_DECISION_CMD.contains("deciduous add"));
+        assert!(OPENCODE_DECISION_CMD.contains("deciduous link"));
+        assert!(OPENCODE_DECISION_CMD.contains("$ARGUMENTS"));
+    }
+
+    #[test]
+    fn test_opencode_context_cmd_contains_recovery() {
+        assert!(OPENCODE_CONTEXT_CMD.contains("Context Recovery"));
+        assert!(OPENCODE_CONTEXT_CMD.contains("deciduous nodes"));
+        assert!(OPENCODE_CONTEXT_CMD.contains("deciduous edges"));
+        assert!(OPENCODE_CONTEXT_CMD.contains("$ARGUMENTS"));
+    }
+
+    #[test]
+    fn test_opencode_build_test_cmd_has_frontmatter() {
+        assert!(OPENCODE_BUILD_TEST_CMD.starts_with("---"));
+        assert!(OPENCODE_BUILD_TEST_CMD.contains("description:"));
+        assert!(OPENCODE_BUILD_TEST_CMD.contains("cargo test"));
+    }
+
+    #[test]
+    fn test_opencode_serve_ui_cmd_has_frontmatter() {
+        assert!(OPENCODE_SERVE_UI_CMD.starts_with("---"));
+        assert!(OPENCODE_SERVE_UI_CMD.contains("description:"));
+        assert!(OPENCODE_SERVE_UI_CMD.contains("deciduous serve"));
+    }
+
+    #[test]
+    fn test_opencode_sync_graph_cmd_has_frontmatter() {
+        assert!(OPENCODE_SYNC_GRAPH_CMD.starts_with("---"));
+        assert!(OPENCODE_SYNC_GRAPH_CMD.contains("description:"));
+        assert!(OPENCODE_SYNC_GRAPH_CMD.contains("deciduous sync"));
     }
 
     // === File Helper Tests (with tempdir) ===

@@ -24,6 +24,10 @@ enum Command {
         /// Initialize for Windsurf (creates .windsurf/rules/ and AGENTS.md)
         #[arg(long, group = "editor")]
         windsurf: bool,
+
+        /// Initialize for OpenCode (creates .opencode/command/ and AGENTS.md)
+        #[arg(long, group = "editor")]
+        opencode: bool,
     },
 
     /// Update tooling files to latest version (overwrites existing)
@@ -35,6 +39,10 @@ enum Command {
         /// Update Windsurf files (.windsurf/rules/, AGENTS.md)
         #[arg(long, group = "editor")]
         windsurf: bool,
+
+        /// Update OpenCode files (.opencode/command/, AGENTS.md)
+        #[arg(long, group = "editor")]
+        opencode: bool,
     },
 
     /// Add a new node to the decision graph
@@ -300,10 +308,12 @@ fn main() {
     let args = Args::parse();
 
     // Handle init separately - it doesn't need an existing database
-    if let Command::Init { claude: _, windsurf } = args.command {
+    if let Command::Init { claude: _, windsurf, opencode } = args.command {
         // Determine editor type: default to Claude if neither specified
         let editor = if windsurf {
             deciduous::init::Editor::Windsurf
+        } else if opencode {
+            deciduous::init::Editor::Opencode
         } else {
             deciduous::init::Editor::Claude
         };
@@ -316,10 +326,12 @@ fn main() {
     }
 
     // Handle update separately - it doesn't need an existing database
-    if let Command::Update { claude: _, windsurf } = args.command {
+    if let Command::Update { claude: _, windsurf, opencode } = args.command {
         // Determine editor type: default to Claude if neither specified
         let editor = if windsurf {
             deciduous::init::Editor::Windsurf
+        } else if opencode {
+            deciduous::init::Editor::Opencode
         } else {
             deciduous::init::Editor::Claude
         };
