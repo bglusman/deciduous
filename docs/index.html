@@ -61,6 +61,45 @@
             color: #6e7781;
         }
 
+        .elevator-pitch {
+            background: #f6f8fa;
+            border: 1px solid #d0d7de;
+            border-radius: 10px;
+            padding: 25px 30px;
+            margin: 30px 0;
+            text-align: left;
+        }
+        .elevator-pitch p {
+            color: #24292f;
+            margin-bottom: 15px;
+            line-height: 1.7;
+        }
+        .elevator-pitch p:first-child {
+            font-size: 1.2rem;
+            color: #24292f;
+        }
+        .elevator-pitch ul {
+            margin: 20px 0 0 0;
+            padding-left: 0;
+            list-style: none;
+        }
+        .elevator-pitch li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+            color: #57606a;
+        }
+        .elevator-pitch li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #2da44e;
+            font-weight: bold;
+        }
+        .elevator-pitch li strong {
+            color: #24292f;
+        }
+
         .code-block {
             background: #24292f;
             color: #f6f8fa;
@@ -262,6 +301,19 @@
             <p class="tagline">Decision graph tooling for AI-assisted development.</p>
             <p class="tagline-secondary">Track every goal, decision, and outcome. Survive context loss. Query your reasoning.</p>
         </header>
+
+        <div class="elevator-pitch">
+            <p><strong>Claude forgets. Your decision graph doesn't.</strong></p>
+            <p>Every session with an LLM ends the same way: context compacts, decisions evaporate, and next time you're starting from scratch. Six months later, nobody remembers <em>why</em> you chose OAuth over JWT, or why you rejected that "simpler" approach.</p>
+            <p>Deciduous fixes this. Log decisions <em>as they happen</em>—goals, options considered, choices made, outcomes observed. The graph persists across sessions, across teammates, across time. Query it. Visualize it. Never lose institutional knowledge again.</p>
+            <ul>
+                <li><strong>Survive context loss</strong> — Pick up exactly where you left off, even months later</li>
+                <li><strong>Track the "why"</strong> — Not just what you built, but why you built it that way</li>
+                <li><strong>Query your reasoning</strong> — Find past decisions by type, status, or full-text search</li>
+                <li><strong>Share across teams</strong> — Export/import patches to sync decisions across developers</li>
+                <li><strong>Visualize the flow</strong> — See your decision DAG in terminal, web, or DOT format</li>
+            </ul>
+        </div>
 
         <div class="code-block">
             <span class="comment"># Install and set up in any project</span><br>
