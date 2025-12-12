@@ -420,10 +420,9 @@ fn main() {
                             println!("No nodes found. Add one with: deciduous add goal \"My goal\"");
                         }
                     } else {
-                        let header = if branch.is_some() {
-                            format!("Nodes on branch '{}' ({} total):", branch.as_ref().unwrap(), filtered.len())
-                        } else {
-                            format!("{} nodes:", filtered.len())
+                        let header = match &branch {
+                            Some(b) => format!("Nodes on branch '{}' ({} total):", b, filtered.len()),
+                            None => format!("{} nodes:", filtered.len()),
                         };
                         println!("{}", header.cyan());
                         println!("{:<5} {:<12} {:<10} TITLE", "ID", "TYPE", "STATUS");

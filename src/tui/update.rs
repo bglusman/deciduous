@@ -41,10 +41,10 @@ impl Cmd {
     /// Create a batch of commands
     pub fn batch(cmds: Vec<Cmd>) -> Cmd {
         // Filter out None commands
-        let cmds: Vec<Cmd> = cmds.into_iter().filter(|c| !matches!(c, Cmd::None)).collect();
+        let mut cmds: Vec<Cmd> = cmds.into_iter().filter(|c| !matches!(c, Cmd::None)).collect();
         match cmds.len() {
             0 => Cmd::None,
-            1 => cmds.into_iter().next().unwrap(),
+            1 => cmds.pop().unwrap_or(Cmd::None), // Safe: len == 1 guarantees element
             _ => Cmd::Batch(cmds),
         }
     }
