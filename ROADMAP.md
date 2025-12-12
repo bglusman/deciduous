@@ -586,6 +586,37 @@
 
 ---
 
+### Claude Desktop Integration
+- [ ] **MCP server for Claude Desktop**
+  - Expose deciduous as an MCP (Model Context Protocol) server
+  - Allow Claude Desktop users to interact with decision graphs
+  - Not everyone uses CLI or Claude Code - meet users where they are
+- [ ] **Core MCP tools**
+  - `add_node` - create goal/decision/action/outcome/observation nodes
+  - `link_nodes` - connect nodes with edges
+  - `query_graph` - search and filter the decision graph
+  - `get_context` - retrieve recent decisions for context recovery
+  - `sync_graph` - export/import for sharing
+- [ ] **Desktop-friendly workflows**
+  - Decision tracking for non-coding tasks (writing, research, planning)
+  - Project management and task breakdown
+  - Meeting notes → decision nodes conversion
+  - General knowledge work, not just software engineering
+- [ ] **Cross-platform graph access**
+  - Same `.deciduous/` database works from CLI, TUI, web, and Desktop
+  - Claude Desktop can read graphs created by Claude Code and vice versa
+  - Unified decision history across all interaction modes
+- [ ] **Resource exposure**
+  - Expose graph data as MCP resources
+  - Recent nodes, active goals, pending decisions as browsable resources
+  - Graph statistics and health metrics
+- [ ] **Prompt support**
+  - MCP prompts for common workflows
+  - "Start new goal", "Review decisions", "Context recovery"
+  - Guided decision-making templates
+
+---
+
 ## Future Enhancements
 - [ ] Support for additional editors (Cursor, Copilot, etc.)
 - [ ] `deciduous init --all` to bootstrap for all supported editors at once
