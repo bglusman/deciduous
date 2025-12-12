@@ -401,7 +401,7 @@
 
             <a href="demo/" class="link-item">
                 <span class="link-title">Chains View</span>
-                <span class="link-desc">115+ decisions organized by chains and sessions. The project's memory.</span>
+                <span class="link-desc"><span id="node-count">...</span> decisions organized by chains and sessions. The project's memory.</span>
             </a>
 
             <a href="demo/#/timeline" class="link-item">
@@ -503,5 +503,17 @@ SESSION END -> Graph survives
         </footer>
     </div>
 
+    <script>
+        // Fetch actual node count from graph data
+        fetch('graph-data.json')
+            .then(r => r.json())
+            .then(data => {
+                const count = data.nodes ? data.nodes.length : 0;
+                document.getElementById('node-count').textContent = count;
+            })
+            .catch(() => {
+                document.getElementById('node-count').textContent = '300+';
+            });
+    </script>
 </body>
 </html>
