@@ -220,6 +220,25 @@ enum Command {
     /// Migrate database to add change_id columns (for multi-user sync)
     Migrate,
 
+    /// Audit and maintain graph data quality
+    Audit {
+        /// Associate commits with nodes by matching titles to commit messages
+        #[arg(long)]
+        associate_commits: bool,
+
+        /// Minimum keyword match score (0-100, default 50)
+        #[arg(long, default_value = "50")]
+        min_score: u8,
+
+        /// Only show what would be done, don't modify database
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Auto-apply without confirmation (use with caution)
+        #[arg(long)]
+        yes: bool,
+    },
+
     /// Launch the terminal user interface
     Tui {
         /// Optional database path (default: auto-discover)
@@ -1004,6 +1023,134 @@ fn main() {
         }
 
         Command::Tui { .. } => unreachable!(), // Handled above
+
+        Command::Audit { associate_commits, min_score, dry_run, yes } => {
+            if !associate_commits {
+                eprintln!("{} No audit action specified. Use --associate-commits", "Error:".red());
+                std::process::exit(1);
+            }
+
+            // Get all nodes
+            let nodes = match db.get_all_nodes() {
+                Ok(n) => n,
+                Err(e) => {
+                    eprintln!("{} {}", "Error:".red(), e);
+                    std::process::exit(1);
+                }
+            };
+
+            // Get git commits since Nov 2024
+            let commits = get_git_commits_for_audit();
+            if commits.is_empty() {
+                eprintln!("{} No git commits found", "Error:".red());
+                std::process::exit(1);
+            }
+
+            println!("{} {} nodes, {} commits", "Analyzing:".cyan(), nodes.len(), commits.len());
+
+            // Find action/outcome nodes without commits
+            let nodes_to_check: Vec<_> = nodes.iter()
+                .filter(|n| n.node_type == "action" || n.node_type == "outcome")
+                .filter(|n| {
+                    // Check if already has commit
+                    !n.metadata_json.as_ref()
+                        .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
+                        .and_then(|v| v.get("commit").and_then(|c| c.as_str()).map(|s| !s.is_empty()))
+                        .unwrap_or(false)
+                })
+                .collect();
+
+            let with_commits = nodes.iter()
+                .filter(|n| n.node_type == "action" || n.node_type == "outcome")
+                .filter(|n| {
+                    n.metadata_json.as_ref()
+                        .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
+                        .and_then(|v| v.get("commit").and_then(|c| c.as_str()).map(|s| !s.is_empty()))
+                        .unwrap_or(false)
+                })
+                .count();
+
+            println!("  Action/outcome nodes: {} with commits, {} without", with_commits, nodes_to_check.len());
+
+            // Find matches
+            let mut matches: Vec<CommitMatch> = Vec::new();
+            let threshold = min_score as f64 / 100.0;
+
+            for node in &nodes_to_check {
+                let mut best_match: Option<(&AuditCommit, f64)> = None;
+
+                for commit in &commits {
+                    let score = keyword_match_score(&node.title, &commit.message);
+                    if score >= threshold && (best_match.is_none() || score > best_match.unwrap().1) {
+                        best_match = Some((commit, score));
+                    }
+                }
+
+                if let Some((commit, score)) = best_match {
+                    matches.push(CommitMatch {
+                        node_id: node.id,
+                        node_title: node.title.clone(),
+                        commit_hash: commit.hash.clone(),
+                        commit_message: commit.message.clone(),
+                        score,
+                    });
+                }
+            }
+
+            if matches.is_empty() {
+                println!("\n{} No matches found above {}% threshold", "Result:".cyan(), min_score);
+                return;
+            }
+
+            // Sort by score descending
+            matches.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+
+            println!("\n{} Found {} potential matches (>= {}%):", "Matches:".green(), matches.len(), min_score);
+            println!("{}", "=".repeat(80));
+
+            for m in &matches {
+                println!("\nNode #{} ({}%): {}", m.node_id, (m.score * 100.0) as u8, truncate(&m.node_title, 55));
+                println!("  -> {}: {}", &m.commit_hash[..7], truncate(&m.commit_message, 55));
+            }
+
+            if dry_run {
+                println!("\n{} Dry run - no changes made", "Info:".cyan());
+                return;
+            }
+
+            // Confirm unless --yes
+            if !yes {
+                println!("\n{}", "=".repeat(80));
+                print!("Apply {} associations? [y/N]: ", matches.len());
+                use std::io::Write;
+                std::io::stdout().flush().ok();
+
+                let mut input = String::new();
+                if std::io::stdin().read_line(&mut input).is_err() || input.trim().to_lowercase() != "y" {
+                    println!("{}", "Aborted".yellow());
+                    return;
+                }
+            }
+
+            // Apply matches
+            let mut applied = 0;
+            let mut failed = 0;
+
+            for m in &matches {
+                match db.update_node_commit(m.node_id, &m.commit_hash) {
+                    Ok(()) => {
+                        applied += 1;
+                        println!("{} Node #{} <- {}", "Linked:".green(), m.node_id, &m.commit_hash[..7]);
+                    }
+                    Err(e) => {
+                        failed += 1;
+                        eprintln!("{} Node #{}: {}", "Failed:".red(), m.node_id, e);
+                    }
+                }
+            }
+
+            println!("\n{} {} linked, {} failed", "Done:".green(), applied, failed);
+        }
     }
 }
 
@@ -1016,6 +1163,86 @@ fn truncate(s: &str, max_len: usize) -> String {
         format!("{}...", truncated)
     }
 }
+
+// =============================================================================
+// Audit command helpers
+// =============================================================================
+
+/// Commit info for audit matching
+struct AuditCommit {
+    hash: String,
+    message: String,
+}
+
+/// A potential node-to-commit match
+struct CommitMatch {
+    node_id: i32,
+    node_title: String,
+    commit_hash: String,
+    commit_message: String,
+    score: f64,
+}
+
+/// Get git commits for audit (since Nov 2024)
+fn get_git_commits_for_audit() -> Vec<AuditCommit> {
+    let output = ProcessCommand::new("git")
+        .args(["log", "--format=%H|%s", "--since=2024-11-01"])
+        .output()
+        .ok();
+
+    match output {
+        Some(o) if o.status.success() => {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .filter_map(|line| {
+                    let parts: Vec<&str> = line.splitn(2, '|').collect();
+                    if parts.len() == 2 {
+                        Some(AuditCommit {
+                            hash: parts[0].to_string(),
+                            message: parts[1].to_string(),
+                        })
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// Calculate keyword match score between node title and commit message
+fn keyword_match_score(node_title: &str, commit_message: &str) -> f64 {
+    let stopwords: std::collections::HashSet<&str> = [
+        "the", "a", "an", "and", "or", "to", "for", "in", "on", "with",
+        "is", "was", "be", "as", "of", "it", "that", "this", "from", "by"
+    ].iter().cloned().collect();
+
+    let normalize = |s: &str| -> std::collections::HashSet<String> {
+        s.to_lowercase()
+            .chars()
+            .filter(|c| c.is_alphanumeric() || c.is_whitespace())
+            .collect::<String>()
+            .split_whitespace()
+            .filter(|w| !stopwords.contains(w))
+            .map(|s| s.to_string())
+            .collect()
+    };
+
+    let node_words = normalize(node_title);
+    let commit_words = normalize(commit_message);
+
+    if node_words.is_empty() {
+        return 0.0;
+    }
+
+    let common: std::collections::HashSet<_> = node_words.intersection(&commit_words).collect();
+    common.len() as f64 / node_words.len() as f64
+}
+
+// =============================================================================
+// Git history export helpers
+// =============================================================================
 
 /// Git commit info for timeline view (matches web/src/types/graph.ts GitCommit)
 #[derive(serde::Serialize)]
@@ -1114,4 +1341,105 @@ fn export_git_history(nodes: &[deciduous::DecisionNode], output_dir: &std::path:
     std::fs::write(&output_path, &json)?;
 
     Ok(commits.len())
+}
+
+// =============================================================================
+// Tests
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // === keyword_match_score Tests ===
+
+    #[test]
+    fn test_keyword_match_exact() {
+        // Exact match should be 100%
+        let score = keyword_match_score(
+            "Add user authentication",
+            "feat: Add user authentication",
+        );
+        assert!((score - 1.0).abs() < 0.01, "Expected ~100%, got {}", score);
+    }
+
+    #[test]
+    fn test_keyword_match_partial() {
+        // Partial overlap
+        let score = keyword_match_score(
+            "Implement dark mode toggle",
+            "feat: add dark mode support",
+        );
+        // "dark" and "mode" match, "implement" and "toggle" don't
+        assert!(score > 0.3 && score < 0.8, "Expected partial match, got {}", score);
+    }
+
+    #[test]
+    fn test_keyword_match_no_overlap() {
+        let score = keyword_match_score(
+            "Fix database connection",
+            "feat: add new UI component",
+        );
+        assert!(score < 0.1, "Expected no match, got {}", score);
+    }
+
+    #[test]
+    fn test_keyword_match_ignores_stopwords() {
+        // Stopwords like "the", "a", "to" should be ignored
+        let score = keyword_match_score(
+            "the fix for the bug",
+            "a fix to the issue",
+        );
+        // Only "fix" matches, "bug" vs "issue" don't
+        assert!(score > 0.0, "Should have some match from 'fix'");
+    }
+
+    #[test]
+    fn test_keyword_match_case_insensitive() {
+        let score = keyword_match_score(
+            "ADD USER AUTH",
+            "add user auth",
+        );
+        assert!((score - 1.0).abs() < 0.01, "Should match case-insensitively");
+    }
+
+    #[test]
+    fn test_keyword_match_empty_title() {
+        let score = keyword_match_score("", "some commit message");
+        assert_eq!(score, 0.0, "Empty title should return 0");
+    }
+
+    #[test]
+    fn test_keyword_match_all_stopwords() {
+        let score = keyword_match_score("the a an", "the a an");
+        assert_eq!(score, 0.0, "All stopwords should return 0");
+    }
+
+    #[test]
+    fn test_keyword_match_special_chars() {
+        // Special characters are filtered, identical strings match
+        let score = keyword_match_score(
+            "fix: user-auth (v2)",
+            "fix: user-auth (v2)",
+        );
+        // Both strings normalize the same, should be 100%
+        assert!((score - 1.0).abs() < 0.01, "Same string should match 100%, got {}", score);
+
+        // Punctuation like colons is stripped
+        let score2 = keyword_match_score(
+            "fix bug",
+            "fix: bug",
+        );
+        assert!((score2 - 1.0).abs() < 0.01, "Punctuation should be ignored, got {}", score2);
+    }
+
+    #[test]
+    fn test_keyword_match_real_example() {
+        // Real example from the codebase
+        let score = keyword_match_score(
+            "Implemented --claude and --windsurf flags for init command",
+            "feat: add --claude and --windsurf flags to init command",
+        );
+        assert!(score > 0.7, "Real example should have high match, got {}", score);
+    }
 }
