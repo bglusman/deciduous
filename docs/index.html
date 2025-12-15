@@ -89,6 +89,22 @@
             font-family: 'SF Mono', Monaco, 'Courier New', monospace;
             font-size: 0.9rem;
             line-height: 1.6;
+            max-height: 400px;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+        .session-content::-webkit-scrollbar {
+            width: 8px;
+        }
+        .session-content::-webkit-scrollbar-track {
+            background: #2d2d2d;
+        }
+        .session-content::-webkit-scrollbar-thumb {
+            background: #555;
+            border-radius: 4px;
+        }
+        .session-content::-webkit-scrollbar-thumb:hover {
+            background: #666;
         }
         .session-step {
             opacity: 0;
@@ -996,10 +1012,27 @@
                 // Keep defaults
             });
 
+        // Auto-scroll as steps appear
+        function setupAutoScroll() {
+            const content = document.getElementById('session-content');
+            const steps = content.querySelectorAll('.session-step, .session-divider');
+
+            steps.forEach(step => {
+                const delay = parseFloat(getComputedStyle(step).getPropertyValue('--delay')) * 1000;
+                setTimeout(() => {
+                    // Scroll to show the new step
+                    step.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                }, delay + 300); // Small offset after animation starts
+            });
+        }
+
         // Replay the session demo animation
         function replayDemo() {
             const content = document.getElementById('session-content');
             const steps = content.querySelectorAll('.session-step, .session-divider');
+
+            // Scroll to top first
+            content.scrollTop = 0;
 
             // Reset all animations
             steps.forEach(step => {
@@ -1007,7 +1040,13 @@
                 step.offsetHeight; // Trigger reflow
                 step.style.animation = null;
             });
+
+            // Re-setup auto-scroll
+            setupAutoScroll();
         }
+
+        // Start auto-scroll on page load
+        setupAutoScroll();
     </script>
 </body>
 </html>
