@@ -5950,6 +5950,50 @@
       "created_at": "2025-12-15T09:51:21.430135-05:00",
       "updated_at": "2025-12-15T09:51:21.430135-05:00",
       "metadata_json": "{\"branch\":\"main\",\"commit\":\"45a0428\",\"confidence\":100}"
+    },
+    {
+      "id": 543,
+      "change_id": "02497504-d700-44c1-8429-ef5f56a043b2",
+      "node_type": "goal",
+      "title": "Refresh landing page with current state of project",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T09:58:28.031988-05:00",
+      "updated_at": "2025-12-15T09:58:28.031988-05:00",
+      "metadata_json": "{\"branch\":\"landing-page-refresh\",\"confidence\":90,\"prompt\":\"User requested a fresh facelift for the landing page now that story page, tutorial, and workflows are fleshed out\"}"
+    },
+    {
+      "id": 544,
+      "change_id": "d178e60e-0f5e-44b1-b8b6-661f31b8a9a7",
+      "node_type": "decision",
+      "title": "Content strategy for landing page refresh",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T09:58:37.312122-05:00",
+      "updated_at": "2025-12-15T09:58:37.312122-05:00",
+      "metadata_json": "{\"branch\":\"landing-page-refresh\",\"confidence\":85}"
+    },
+    {
+      "id": 545,
+      "change_id": "6949b0f4-42ad-4122-84fe-d57a7e678fd7",
+      "node_type": "action",
+      "title": "Redesigning landing page with fresh content",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T09:58:52.056481-05:00",
+      "updated_at": "2025-12-15T09:58:52.056481-05:00",
+      "metadata_json": "{\"branch\":\"landing-page-refresh\",\"confidence\":85,\"files\":[\"docs/index.html\"]}"
+    },
+    {
+      "id": 546,
+      "change_id": "dbe0fbb5-afbe-4a4e-b041-67d4c00d6220",
+      "node_type": "outcome",
+      "title": "Landing page redesigned with animated session demo",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T10:01:21.572322-05:00",
+      "updated_at": "2025-12-15T10:01:21.572322-05:00",
+      "metadata_json": "{\"branch\":\"landing-page-refresh\",\"confidence\":90,\"files\":[\"docs/index.html\"]}"
     }
   ],
   "edges": [
@@ -11133,6 +11177,39 @@
       "weight": 1.0,
       "rationale": "Successfully deployed",
       "created_at": "2025-12-15T09:51:27.332507-05:00"
+    },
+    {
+      "id": 472,
+      "from_node_id": 543,
+      "to_node_id": 544,
+      "from_change_id": "02497504-d700-44c1-8429-ef5f56a043b2",
+      "to_change_id": "d178e60e-0f5e-44b1-b8b6-661f31b8a9a7",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Deciding on content approach",
+      "created_at": "2025-12-15T09:58:43.664060-05:00"
+    },
+    {
+      "id": 473,
+      "from_node_id": 544,
+      "to_node_id": 545,
+      "from_change_id": "d178e60e-0f5e-44b1-b8b6-661f31b8a9a7",
+      "to_change_id": "6949b0f4-42ad-4122-84fe-d57a7e678fd7",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementing refresh",
+      "created_at": "2025-12-15T09:58:56.575528-05:00"
+    },
+    {
+      "id": 474,
+      "from_node_id": 545,
+      "to_node_id": 546,
+      "from_change_id": "6949b0f4-42ad-4122-84fe-d57a7e678fd7",
+      "to_change_id": "dbe0fbb5-afbe-4a4e-b041-67d4c00d6220",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Completed redesign",
+      "created_at": "2025-12-15T10:01:30.435415-05:00"
     }
   ]
 }
