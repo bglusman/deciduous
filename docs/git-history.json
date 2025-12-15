@@ -1,11 +1,19 @@
 [
   {
-    "hash": "794136ec5dafce0663d4209242ee0dbf278a23b1",
-    "short_hash": "794136e",
+    "hash": "ae2169378fb509c1aa456c1120728c0c5a79e636",
+    "short_hash": "ae21693",
     "author": "Bobby Nathan",
-    "date": "2025-12-15T02:50:38-05:00",
-    "message": "docs(tutorial): add OpenCode support, update viewer docs, fix navigation\n\n- Add OpenCode editor section to AI Integration page\n- Add editor-specific init flags table to Initializing page\n- Add Timeline vs DAG view toggle (Tab key) to TUI docs\n- Update Web Viewer to show Story and DAG views\n- Fix git history section (deciduous sync now auto-exports)\n- Fix page navigation links\n- Sync graph data (534 nodes, 465 edges)",
-    "files_changed": 8
+    "date": "2025-12-15T02:57:22-05:00",
+    "message": "docs: add Story View Componentization to roadmap\n\n- Componentize story page elements into discrete, reusable components\n- Define Story data contract/schema with JSON/TypeScript\n- Enable rich context over decision nodes/edges as batches\n- Create higher-level narrative layer over raw decision graph\n- Keep format portable for external systems integration",
+    "files_changed": 5
+  },
+  {
+    "hash": "ae2169378fb509c1aa456c1120728c0c5a79e636",
+    "short_hash": "ae21693",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T02:57:22-05:00",
+    "message": "docs: add Story View Componentization to roadmap\n\n- Componentize story page elements into discrete, reusable components\n- Define Story data contract/schema with JSON/TypeScript\n- Enable rich context over decision nodes/edges as batches\n- Create higher-level narrative layer over raw decision graph\n- Keep format portable for external systems integration",
+    "files_changed": 5
   },
   {
     "hash": "794136ec5dafce0663d4209242ee0dbf278a23b1",
