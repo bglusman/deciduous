@@ -167,6 +167,37 @@
 - [ ] Goal: new session can pick up exactly where the last one left off
   <!-- roadmap:item id="ecfe8c53-c74d-484f-a5b1-f0bde257c3f1" outcome_change_id="" -->
 
+### Story View Componentization
+<!-- roadmap:section id="a7f3e891-2c4d-4b5f-9d8a-7e6f1a3c5b2d" -->
+*Transform the Story page into a reusable, structured narrative layer over decision graphs*
+- [ ] **Componentize Story page elements**
+  <!-- roadmap:item id="b8e4f902-3d5e-4c6a-ae9b-8f7g2b4d6c3e" outcome_change_id="" -->
+  - Break down Story page into discrete, reusable components
+  - Each section (timeline events, milestones, narrative blocks) becomes a component
+  - Components should be independently renderable and composable
+- [ ] **Define Story data contract/schema**
+  <!-- roadmap:item id="c9f5g013-4e6f-5d7b-bf0c-9g8h3c5e7d4f" outcome_change_id="" -->
+  - Create a well-defined JSON/TypeScript schema for Story structure
+  - Include: timeline events, milestones, phases, narrative blocks, metadata
+  - Schema should be versioned and extensible
+  - Consider compatibility with external systems (portable format)
+- [ ] **Rich context over decision nodes/edges**
+  <!-- roadmap:item id="d0g6h124-5f7g-6e8c-cg1d-0h9i4d6f8e5g" outcome_change_id="" -->
+  - Allow Story components to be attached to decision graph nodes as batches
+  - Stories become a higher-level narrative layer over the raw decision graph
+  - Link Story sections to specific goals, decisions, and outcomes
+  - Enable querying: "Show me the story for goal #42"
+- [ ] **Story as documented institutional memory**
+  <!-- roadmap:item id="e1h7i235-6g8h-7f9d-dh2e-1i0j5e7g9f6h" outcome_change_id="" -->
+  - Stories capture the "why" and context that raw nodes miss
+  - Can be used for onboarding, PR descriptions, release notes
+  - Export stories as standalone narratives or embed in docs
+- [ ] **Portable format for external use**
+  <!-- roadmap:item id="f2i8j346-7h9i-8g0e-ei3f-2j1k6f8h0g7i" outcome_change_id="" -->
+  - Story format should work beyond deciduous (potential export targets)
+  - Consider: Markdown export, JSON API, embed in other tools
+  - Keep schema simple enough to map to other narrative systems
+
 ---
 
 ## Backlog - Core Features

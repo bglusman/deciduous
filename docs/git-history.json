@@ -1,11 +1,19 @@
 [
   {
-    "hash": "f2ef1d9edbc9faa2cd3886f6200fea2ecc6b2c7c",
-    "short_hash": "f2ef1d9",
+    "hash": "794136ec5dafce0663d4209242ee0dbf278a23b1",
+    "short_hash": "794136e",
     "author": "Bobby Nathan",
-    "date": "2025-12-15T02:43:35-05:00",
-    "message": "feat(docs): update main page OG image to match new dark style\n\n- Dark gradient background with graph visualization\n- Feature highlights: AI-Assisted Dev, Context Recovery, Team Sync\n- Install command shown: cargo install deciduous\n- Matches tutorial and demo OG image styles\n- Synced graph data (529 nodes, 462 edges)",
-    "files_changed": 6
+    "date": "2025-12-15T02:50:38-05:00",
+    "message": "docs(tutorial): add OpenCode support, update viewer docs, fix navigation\n\n- Add OpenCode editor section to AI Integration page\n- Add editor-specific init flags table to Initializing page\n- Add Timeline vs DAG view toggle (Tab key) to TUI docs\n- Update Web Viewer to show Story and DAG views\n- Fix git history section (deciduous sync now auto-exports)\n- Fix page navigation links\n- Sync graph data (534 nodes, 465 edges)",
+    "files_changed": 8
+  },
+  {
+    "hash": "794136ec5dafce0663d4209242ee0dbf278a23b1",
+    "short_hash": "794136e",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T02:50:38-05:00",
+    "message": "docs(tutorial): add OpenCode support, update viewer docs, fix navigation\n\n- Add OpenCode editor section to AI Integration page\n- Add editor-specific init flags table to Initializing page\n- Add Timeline vs DAG view toggle (Tab key) to TUI docs\n- Update Web Viewer to show Story and DAG views\n- Fix git history section (deciduous sync now auto-exports)\n- Fix page navigation links\n- Sync graph data (534 nodes, 465 edges)",
+    "files_changed": 8
   },
   {
     "hash": "f2ef1d9edbc9faa2cd3886f6200fea2ecc6b2c7c",
