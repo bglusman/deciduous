@@ -1,11 +1,19 @@
 [
   {
-    "hash": "84b2ba9cd3f2a4b65712c36221fa23a258e05db2",
-    "short_hash": "84b2ba9",
+    "hash": "9157c1a263b323d140642b422f0bf6b0b3ec6a86",
+    "short_hash": "9157c1a",
     "author": "Bobby Nathan",
-    "date": "2025-12-15T02:38:29-05:00",
-    "message": "feat(docs): add rich OG meta tags to tutorial and demo pages\n\n- Tutorial: custom OG image with terminal illustration, full descriptions\n- Demo: custom OG image with graph visualization and stats, descriptions\n- Both pages now have Twitter card support for link previews",
-    "files_changed": 9
+    "date": "2025-12-15T02:41:15-05:00",
+    "message": "feat(web): increase default recent chains from 3 to 5\n\nShows more context on initial page load for both GH Pages demo and deciduous serve",
+    "files_changed": 7
+  },
+  {
+    "hash": "9157c1a263b323d140642b422f0bf6b0b3ec6a86",
+    "short_hash": "9157c1a",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T02:41:15-05:00",
+    "message": "feat(web): increase default recent chains from 3 to 5\n\nShows more context on initial page load for both GH Pages demo and deciduous serve",
+    "files_changed": 7
   },
   {
     "hash": "84b2ba9cd3f2a4b65712c36221fa23a258e05db2",
