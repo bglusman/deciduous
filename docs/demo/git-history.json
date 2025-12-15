@@ -1,11 +1,27 @@
 [
   {
-    "hash": "f3611c499051d3944ff13468d4bb1233fdf5c007",
-    "short_hash": "f3611c4",
+    "hash": "eddcf91c9518bc130ae833d0a68fce7a1e3d87b1",
+    "short_hash": "eddcf91",
     "author": "Bobby Nathan",
-    "date": "2025-12-15T09:51:41-05:00",
-    "message": "docs: sync graph",
-    "files_changed": 4
+    "date": "2025-12-15T10:27:44-05:00",
+    "message": "Merge branch 'landing-page-refresh' into main\n\nLanding page refresh with:\n- Animated session demo starting with /context\n- Auto-scrolling terminal with 920ms smooth scroll\n- Quickstart guide with 5 animated terminal demos\n- Stats banner, proof cards, editor badges\n- Updated graph: 553 nodes, 484 edges",
+    "files_changed": 0
+  },
+  {
+    "hash": "5bb13c8532e33276dac18b5df0be358024d167f9",
+    "short_hash": "5bb13c8",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T10:23:19-05:00",
+    "message": "feat: add animated quickstart guide, slow demo scroll 15%\n\n- Add 5-step quickstart guide with animated terminal demos\n- Install, init, add nodes, link nodes, view/share steps\n- Slow top demo scroll from 800ms to 920ms for better readability\n- Sync graph: 553 nodes, 482 edges",
+    "files_changed": 3
+  },
+  {
+    "hash": "f7ce5543f81778db99920b7a779137a7fd212d54",
+    "short_hash": "f7ce554",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T10:01:51-05:00",
+    "message": "feat: refresh landing page with animated session demo\n\nNew sections:\n- Animated Claude Code session walkthrough showing the feedback loop\n- Stats banner with live node/edge counts\n- 'Built With Itself' proof section\n- 'Works With Your Editor' with Claude/Windsurf/OpenCode badges\n- 'Three Ways to View' cards for Web/TUI/CLI\n- Improved 'The Workflow' with numbered steps\n- Updated 'The Full Story' section\n\nKept:\n- Same OG meta tags and rich previews\n- Same overall structure (nav, header, elevator pitch)\n- Asciinema demo, PR examples, code quickstart",
+    "files_changed": 5
   },
   {
     "hash": "45a04287026c0a8079a96236ab89b12d71a7f037",
