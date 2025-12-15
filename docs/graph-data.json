@@ -6104,6 +6104,50 @@
       "created_at": "2025-12-15T10:28:38.628755-05:00",
       "updated_at": "2025-12-15T10:28:38.628755-05:00",
       "metadata_json": "{\"branch\":\"main\",\"confidence\":90,\"prompt\":\"User wanted stats to link to decision graph\"}"
+    },
+    {
+      "id": 557,
+      "change_id": "583efdce-e822-4920-aae6-fbb778dd9aa5",
+      "node_type": "outcome",
+      "title": "Landing page merged to main and deployed",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T10:28:58.455142-05:00",
+      "updated_at": "2025-12-15T10:28:58.455142-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"39db375\",\"confidence\":95}"
+    },
+    {
+      "id": 558,
+      "change_id": "fb57826d-63ee-4982-a277-531c56723281",
+      "node_type": "action",
+      "title": "Increase default recent chains from 5 to 8",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T10:31:51.629886-05:00",
+      "updated_at": "2025-12-15T10:31:51.629886-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90}"
+    },
+    {
+      "id": 559,
+      "change_id": "ffbfb56b-76db-43f6-b19f-b71b5aabc3f1",
+      "node_type": "outcome",
+      "title": "Default chains increased to 8 and deployed",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T10:32:46.561535-05:00",
+      "updated_at": "2025-12-15T10:32:46.561535-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"5eae6b5\",\"confidence\":95}"
+    },
+    {
+      "id": 560,
+      "change_id": "f1f2a37b-5c87-4392-b646-87608236a48b",
+      "node_type": "action",
+      "title": "Rewrite quickstart to show Claude Code usage",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T10:49:09.858531-05:00",
+      "updated_at": "2025-12-15T10:49:09.858531-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95,\"prompt\":\"User wanted quickstart to show Claude doing the logging, not manual CLI\"}"
     }
   ],
   "edges": [
@@ -11441,6 +11485,50 @@
       "weight": 1.0,
       "rationale": "Landing page enhancement",
       "created_at": "2025-12-15T10:28:38.637347-05:00"
+    },
+    {
+      "id": 486,
+      "from_node_id": 556,
+      "to_node_id": 557,
+      "from_change_id": "31eeef77-ce56-45a2-bf12-925d509aad65",
+      "to_change_id": "583efdce-e822-4920-aae6-fbb778dd9aa5",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Work complete",
+      "created_at": "2025-12-15T10:28:58.464812-05:00"
+    },
+    {
+      "id": 487,
+      "from_node_id": 543,
+      "to_node_id": 558,
+      "from_change_id": "02497504-d700-44c1-8429-ef5f56a043b2",
+      "to_change_id": "fb57826d-63ee-4982-a277-531c56723281",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Graph display improvement",
+      "created_at": "2025-12-15T10:31:51.640681-05:00"
+    },
+    {
+      "id": 488,
+      "from_node_id": 558,
+      "to_node_id": 559,
+      "from_change_id": "fb57826d-63ee-4982-a277-531c56723281",
+      "to_change_id": "ffbfb56b-76db-43f6-b19f-b71b5aabc3f1",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Complete",
+      "created_at": "2025-12-15T10:32:46.569540-05:00"
+    },
+    {
+      "id": 489,
+      "from_node_id": 543,
+      "to_node_id": 560,
+      "from_change_id": "02497504-d700-44c1-8429-ef5f56a043b2",
+      "to_change_id": "f1f2a37b-5c87-4392-b646-87608236a48b",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Major UX improvement",
+      "created_at": "2025-12-15T10:49:09.867832-05:00"
     }
   ]
 }

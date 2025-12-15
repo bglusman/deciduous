@@ -1,11 +1,27 @@
 [
   {
-    "hash": "eddcf91c9518bc130ae833d0a68fce7a1e3d87b1",
-    "short_hash": "eddcf91",
+    "hash": "5eae6b5426aa45cf5556a54e3d3c99880cdf1266",
+    "short_hash": "5eae6b5",
     "author": "Bobby Nathan",
-    "date": "2025-12-15T10:27:44-05:00",
-    "message": "Merge branch 'landing-page-refresh' into main\n\nLanding page refresh with:\n- Animated session demo starting with /context\n- Auto-scrolling terminal with 920ms smooth scroll\n- Quickstart guide with 5 animated terminal demos\n- Stats banner, proof cards, editor badges\n- Updated graph: 553 nodes, 484 edges",
-    "files_changed": 0
+    "date": "2025-12-15T10:32:27-05:00",
+    "message": "feat(web): increase default recent chains from 5 to 8\n\nShows more context on initial page load for better overview",
+    "files_changed": 6
+  },
+  {
+    "hash": "5eae6b5426aa45cf5556a54e3d3c99880cdf1266",
+    "short_hash": "5eae6b5",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T10:32:27-05:00",
+    "message": "feat(web): increase default recent chains from 5 to 8\n\nShows more context on initial page load for better overview",
+    "files_changed": 6
+  },
+  {
+    "hash": "39db3754c03d2b5615ce3e8e4d231d6343be7bbc",
+    "short_hash": "39db375",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T10:28:48-05:00",
+    "message": "feat: add 'See the Graph' link to stats banner\n\n- Stats now clickable, linking to decision graph demo\n- Added hover effects for stat links\n- New 'See the Graph' CTA in stats banner\n- Graph: 555 nodes, 485 edges",
+    "files_changed": 3
   },
   {
     "hash": "5bb13c8532e33276dac18b5df0be358024d167f9",

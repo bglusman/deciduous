@@ -688,6 +688,42 @@
             margin-top: 40px;
             justify-content: center;
         }
+        /* Claude session styling for quickstart */
+        .qs-claude-session .quickstart-content {
+            padding: 16px 20px;
+        }
+        .qs-user-msg {
+            color: #e5e5e5;
+            padding-left: 4px;
+            margin-top: 4px;
+        }
+        .qs-claude-msg {
+            color: #e5e5e5;
+            padding-left: 4px;
+            margin-top: 4px;
+        }
+        .qs-cmd-inline {
+            color: #7ee787;
+            font-size: 0.85rem;
+            padding: 4px 0;
+        }
+        .qs-recovery-box {
+            background: #1a3a1a;
+            border: 1px solid #22543d;
+            border-radius: 6px;
+            padding: 12px;
+            margin-top: 8px;
+            color: #86efac;
+            font-size: 0.85rem;
+        }
+        .qs-recovery-box strong {
+            color: #4ade80;
+        }
+        .qs-tree-line {
+            color: #a5d6ff;
+            display: block;
+            line-height: 1.5;
+        }
     </style>
 </head>
 <body>
@@ -1009,7 +1045,7 @@
 
         <section class="quickstart-section">
             <h2>Quickstart Guide</h2>
-            <p>Get deciduous running in your project in under 2 minutes.</p>
+            <p>Get deciduous running with Claude Code in under 2 minutes.</p>
 
             <!-- Step 1: Install -->
             <div class="quickstart-step">
@@ -1050,7 +1086,7 @@
                     <span class="quickstart-num">2</span>
                     <div class="quickstart-info">
                         <h3>Initialize in your project</h3>
-                        <p>Creates the database, slash commands, and web viewer.</p>
+                        <p>Creates slash commands that teach Claude the workflow.</p>
                     </div>
                 </div>
                 <div class="quickstart-terminal" id="qs-init">
@@ -1062,175 +1098,157 @@
                     </div>
                     <div class="quickstart-content">
                         <div class="qs-step" style="--delay: 0s">
-                            <span class="qs-prompt">$</span> <span class="qs-cmd">cd my-project</span>
+                            <span class="qs-prompt">$</span> <span class="qs-cmd">cd my-project && deciduous init</span>
                         </div>
-                        <div class="qs-step" style="--delay: 0.6s">
-                            <span class="qs-prompt">$</span> <span class="qs-cmd">deciduous init</span>
-                        </div>
-                        <div class="qs-step" style="--delay: 1.2s">
+                        <div class="qs-step" style="--delay: 0.8s">
                             <span class="qs-output">Created .deciduous/deciduous.db</span>
                         </div>
-                        <div class="qs-step" style="--delay: 1.6s">
+                        <div class="qs-step" style="--delay: 1.2s">
                             <span class="qs-output">Created .claude/commands/context.md</span>
                         </div>
-                        <div class="qs-step" style="--delay: 2s">
+                        <div class="qs-step" style="--delay: 1.6s">
                             <span class="qs-output">Created .claude/commands/decision.md</span>
                         </div>
-                        <div class="qs-step" style="--delay: 2.4s">
-                            <span class="qs-output">Created docs/ (web viewer)</span>
+                        <div class="qs-step" style="--delay: 2s">
+                            <span class="qs-output">Created CLAUDE.md (project instructions)</span>
                         </div>
-                        <div class="qs-step" style="--delay: 2.8s">
-                            <span class="qs-output">Created CLAUDE.md</span>
-                        </div>
-                        <div class="qs-step" style="--delay: 3.4s">
-                            <span class="qs-success">Deciduous initialized! Run 'deciduous serve' to start.</span>
+                        <div class="qs-step" style="--delay: 2.6s">
+                            <span class="qs-success">Ready! Claude will now log decisions automatically.</span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Step 3: Add your first nodes -->
+            <!-- Step 3: Ask Claude for a feature -->
             <div class="quickstart-step">
                 <div class="quickstart-step-header">
                     <span class="quickstart-num">3</span>
                     <div class="quickstart-info">
-                        <h3>Add your first nodes</h3>
-                        <p>Log goals, decisions, and outcomes as you work.</p>
+                        <h3>Ask Claude for a feature</h3>
+                        <p>Claude automatically logs goals and decisions as it works.</p>
                     </div>
                 </div>
-                <div class="quickstart-terminal" id="qs-nodes">
+                <div class="quickstart-terminal qs-claude-session" id="qs-nodes">
                     <div class="session-header">
                         <span class="session-dot red"></span>
                         <span class="session-dot yellow"></span>
                         <span class="session-dot green"></span>
-                        <span class="session-title">Terminal</span>
+                        <span class="session-title">Claude Code</span>
                     </div>
                     <div class="quickstart-content">
                         <div class="qs-step" style="--delay: 0s">
-                            <span class="qs-comment"># Log a goal with confidence and prompt</span>
+                            <div class="step-label user">You</div>
+                            <div class="qs-user-msg">Add a dark mode toggle to the settings page</div>
                         </div>
-                        <div class="qs-step" style="--delay: 0.5s">
-                            <span class="qs-prompt">$</span> <span class="qs-cmd">deciduous add goal "Add user auth" -c 90 -p "User requested login"</span>
+                        <div class="qs-step" style="--delay: 1.2s">
+                            <div class="step-label claude">Claude</div>
+                            <div class="qs-claude-msg">I'll add dark mode. Let me log this goal first.</div>
                         </div>
-                        <div class="qs-step" style="--delay: 1.3s">
-                            <span class="qs-success">Created node 1 (type: goal) [confidence: 90%]</span>
+                        <div class="qs-step" style="--delay: 2.2s">
+                            <div class="qs-cmd-inline">deciduous add goal "Add dark mode toggle" -c 90 -p "User requested dark mode"</div>
+                            <div class="qs-success">Created node 1 (type: goal) [confidence: 90%]</div>
                         </div>
-                        <div class="qs-step" style="--delay: 2s">
-                            <span class="qs-comment"># Log a decision point</span>
+                        <div class="qs-step" style="--delay: 3.4s">
+                            <div class="step-label claude">Claude</div>
+                            <div class="qs-claude-msg">I need to decide on the theme storage approach.</div>
                         </div>
-                        <div class="qs-step" style="--delay: 2.5s">
-                            <span class="qs-prompt">$</span> <span class="qs-cmd">deciduous add decision "Choose auth strategy" -c 80</span>
+                        <div class="qs-step" style="--delay: 4.2s">
+                            <div class="qs-cmd-inline">deciduous add decision "Theme storage strategy" -c 80</div>
+                            <div class="qs-success">Created node 2 (type: decision)</div>
                         </div>
-                        <div class="qs-step" style="--delay: 3.3s">
-                            <span class="qs-success">Created node 2 (type: decision) [confidence: 80%]</span>
-                        </div>
-                        <div class="qs-step" style="--delay: 4s">
-                            <span class="qs-comment"># Log the outcome with linked commit</span>
-                        </div>
-                        <div class="qs-step" style="--delay: 4.5s">
-                            <span class="qs-prompt">$</span> <span class="qs-cmd">deciduous add outcome "JWT auth working" -c 95 --commit HEAD</span>
-                        </div>
-                        <div class="qs-step" style="--delay: 5.3s">
-                            <span class="qs-success">Created node 3 (type: outcome) [commit: a1b2c3d]</span>
+                        <div class="qs-step" style="--delay: 5s">
+                            <div class="qs-cmd-inline">deciduous link 1 2 -r "Must decide before implementing"</div>
+                            <div class="qs-success">Created edge 1 (1 → 2 via leads_to)</div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Step 4: Link nodes -->
+            <!-- Step 4: Claude implements and tracks -->
             <div class="quickstart-step">
                 <div class="quickstart-step-header">
                     <span class="quickstart-num">4</span>
                     <div class="quickstart-info">
-                        <h3>Connect the graph</h3>
-                        <p>Link nodes together to show how decisions flow.</p>
+                        <h3>Claude implements and tracks</h3>
+                        <p>Actions, outcomes, and commits are all linked together.</p>
                     </div>
                 </div>
-                <div class="quickstart-terminal" id="qs-link">
+                <div class="quickstart-terminal qs-claude-session" id="qs-link">
                     <div class="session-header">
                         <span class="session-dot red"></span>
                         <span class="session-dot yellow"></span>
                         <span class="session-dot green"></span>
-                        <span class="session-title">Terminal</span>
+                        <span class="session-title">Claude Code</span>
                     </div>
                     <div class="quickstart-content">
                         <div class="qs-step" style="--delay: 0s">
-                            <span class="qs-comment"># Link goal → decision</span>
+                            <div class="step-label claude">Claude</div>
+                            <div class="qs-claude-msg">I'll use CSS variables with localStorage. Implementing now...</div>
                         </div>
-                        <div class="qs-step" style="--delay: 0.5s">
-                            <span class="qs-prompt">$</span> <span class="qs-cmd">deciduous link 1 2 -r "Deciding auth approach"</span>
+                        <div class="qs-step" style="--delay: 1s">
+                            <div class="qs-cmd-inline">deciduous add action "Implement CSS variable theming" -c 85 -f "src/theme.ts,src/styles.css"</div>
+                            <div class="qs-success">Created node 3 (type: action) [files: src/theme.ts, src/styles.css]</div>
                         </div>
-                        <div class="qs-step" style="--delay: 1.3s">
-                            <span class="qs-success">Created edge 1 (1 → 2 via leads_to)</span>
+                        <div class="qs-step" style="--delay: 2.2s">
+                            <div class="step-label claude">Claude</div>
+                            <div class="qs-claude-msg">Dark mode is working. Committing and logging the outcome.</div>
                         </div>
-                        <div class="qs-step" style="--delay: 2s">
-                            <span class="qs-comment"># Link decision → outcome</span>
-                        </div>
-                        <div class="qs-step" style="--delay: 2.5s">
-                            <span class="qs-prompt">$</span> <span class="qs-cmd">deciduous link 2 3 -r "Implementation complete"</span>
-                        </div>
-                        <div class="qs-step" style="--delay: 3.3s">
-                            <span class="qs-success">Created edge 2 (2 → 3 via leads_to)</span>
+                        <div class="qs-step" style="--delay: 3s">
+                            <div class="qs-cmd-inline">git commit -m "feat: add dark mode toggle"</div>
+                            <div class="qs-output">[main a1b2c3d] feat: add dark mode toggle</div>
                         </div>
                         <div class="qs-step" style="--delay: 4s">
-                            <span class="qs-comment"># View the chain</span>
+                            <div class="qs-cmd-inline">deciduous add outcome "Dark mode implemented" -c 95 --commit HEAD</div>
+                            <div class="qs-success">Created node 4 (type: outcome) [commit: a1b2c3d]</div>
                         </div>
-                        <div class="qs-step" style="--delay: 4.5s">
-                            <span class="qs-prompt">$</span> <span class="qs-cmd">deciduous nodes</span>
-                        </div>
-                        <div class="qs-step" style="--delay: 5.2s">
-                            <span class="qs-tree">1 [goal] Add user auth → 2 [decision] Choose auth strategy → 3 [outcome] JWT auth working</span>
+                        <div class="qs-step" style="--delay: 5s">
+                            <div class="qs-cmd-inline">deciduous link 3 4 -r "Implementation successful"</div>
+                            <div class="qs-success">Created edge 3 (3 → 4 via leads_to)</div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Step 5: View & Share -->
+            <!-- Step 5: Recover context later -->
             <div class="quickstart-step">
                 <div class="quickstart-step-header">
                     <span class="quickstart-num">5</span>
                     <div class="quickstart-info">
-                        <h3>View and share</h3>
-                        <p>Start the web viewer or browse in the terminal.</p>
+                        <h3>Recover context anytime</h3>
+                        <p>New session? Use /context to pick up where you left off.</p>
                     </div>
                 </div>
-                <div class="quickstart-terminal" id="qs-view">
+                <div class="quickstart-terminal qs-claude-session" id="qs-view">
                     <div class="session-header">
                         <span class="session-dot red"></span>
                         <span class="session-dot yellow"></span>
                         <span class="session-dot green"></span>
-                        <span class="session-title">Terminal</span>
+                        <span class="session-title">Claude Code (new session)</span>
                     </div>
                     <div class="quickstart-content">
                         <div class="qs-step" style="--delay: 0s">
-                            <span class="qs-comment"># Start web viewer</span>
+                            <div class="step-label user">You</div>
+                            <div class="qs-user-msg">/context</div>
                         </div>
-                        <div class="qs-step" style="--delay: 0.5s">
-                            <span class="qs-prompt">$</span> <span class="qs-cmd">deciduous serve</span>
-                        </div>
-                        <div class="qs-step" style="--delay: 1.2s">
-                            <span class="qs-success">Starting graph viewer at http://localhost:3000</span>
+                        <div class="qs-step" style="--delay: 1s">
+                            <div class="step-label claude">Claude</div>
+                            <div class="qs-claude-msg">Recovering context from decision graph...</div>
                         </div>
                         <div class="qs-step" style="--delay: 1.8s">
-                            <span class="qs-output">Auto-refresh enabled (30 second interval)</span>
+                            <div class="qs-cmd-inline">deciduous nodes -n 10</div>
                         </div>
-                        <div class="qs-step" style="--delay: 2.8s">
-                            <span class="qs-comment"># Or use the TUI (in another terminal)</span>
-                        </div>
-                        <div class="qs-step" style="--delay: 3.3s">
-                            <span class="qs-prompt">$</span> <span class="qs-cmd">deciduous tui</span>
+                        <div class="qs-step" style="--delay: 2.6s">
+                            <div class="qs-recovery-box">
+                                <strong>Recent work on main:</strong><br><br>
+                                <span class="qs-tree-line">1 [goal] Add dark mode toggle [90%]</span><br>
+                                <span class="qs-tree-line">&nbsp;&nbsp;↳ 2 [decision] Theme storage strategy</span><br>
+                                <span class="qs-tree-line">&nbsp;&nbsp;&nbsp;&nbsp;↳ 3 [action] Implement CSS variable theming</span><br>
+                                <span class="qs-tree-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↳ 4 [outcome] Dark mode implemented [commit: a1b2c3d]</span>
+                            </div>
                         </div>
                         <div class="qs-step" style="--delay: 4s">
-                            <span class="qs-output">Vim-style navigation: j/k to move, / to search, ? for help</span>
-                        </div>
-                        <div class="qs-step" style="--delay: 5s">
-                            <span class="qs-comment"># Export for GitHub Pages</span>
-                        </div>
-                        <div class="qs-step" style="--delay: 5.5s">
-                            <span class="qs-prompt">$</span> <span class="qs-cmd">deciduous sync</span>
-                        </div>
-                        <div class="qs-step" style="--delay: 6.2s">
-                            <span class="qs-success">Exported graph to docs/graph-data.json (3 nodes, 2 edges)</span>
+                            <div class="step-label claude">Claude</div>
+                            <div class="qs-claude-msg">You completed dark mode (commit a1b2c3d). The toggle uses CSS variables with localStorage. What would you like to work on next?</div>
                         </div>
                     </div>
                 </div>
