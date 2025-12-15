@@ -46,7 +46,7 @@ interface DagreEdgeData {
 type ViewMode = 'recent' | 'all' | 'single';
 
 // Default number of recent chains to show
-const DEFAULT_RECENT_CHAINS = 3;
+const DEFAULT_RECENT_CHAINS = 5;
 
 /**
  * Get the most recent update time for a chain (max of all node updated_at times)

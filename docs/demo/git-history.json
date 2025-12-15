@@ -1,11 +1,19 @@
 [
   {
-    "hash": "152407543c992cd6491e395340833690fefc4545",
-    "short_hash": "1524075",
+    "hash": "84b2ba9cd3f2a4b65712c36221fa23a258e05db2",
+    "short_hash": "84b2ba9",
     "author": "Bobby Nathan",
-    "date": "2025-12-15T02:28:49-05:00",
-    "message": "docs: expand elevator pitch with dev process, PR workflow, querying, team sync",
-    "files_changed": 1
+    "date": "2025-12-15T02:38:29-05:00",
+    "message": "feat(docs): add rich OG meta tags to tutorial and demo pages\n\n- Tutorial: custom OG image with terminal illustration, full descriptions\n- Demo: custom OG image with graph visualization and stats, descriptions\n- Both pages now have Twitter card support for link previews",
+    "files_changed": 9
+  },
+  {
+    "hash": "84b2ba9cd3f2a4b65712c36221fa23a258e05db2",
+    "short_hash": "84b2ba9",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T02:38:29-05:00",
+    "message": "feat(docs): add rich OG meta tags to tutorial and demo pages\n\n- Tutorial: custom OG image with terminal illustration, full descriptions\n- Demo: custom OG image with graph visualization and stats, descriptions\n- Both pages now have Twitter card support for link previews",
+    "files_changed": 9
   },
   {
     "hash": "b694e16274f3317495d9a29e3a1ccaf75c20e64c",
