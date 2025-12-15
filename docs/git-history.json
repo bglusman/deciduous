@@ -1,11 +1,11 @@
 [
   {
-    "hash": "45a04287026c0a8079a96236ab89b12d71a7f037",
-    "short_hash": "45a0428",
+    "hash": "f3611c499051d3944ff13468d4bb1233fdf5c007",
+    "short_hash": "f3611c4",
     "author": "Bobby Nathan",
-    "date": "2025-12-15T09:51:03-05:00",
-    "message": "docs: update landing page blurb to match story page\n\n- LLMs forget, your decisions shouldn't\n- Beyond context recovery: logging forces clearer thinking\n- Institutional memory that compounds over time",
-    "files_changed": 5
+    "date": "2025-12-15T09:51:41-05:00",
+    "message": "docs: sync graph",
+    "files_changed": 4
   },
   {
     "hash": "45a04287026c0a8079a96236ab89b12d71a7f037",
