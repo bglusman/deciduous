@@ -1,6 +1,7 @@
 use chrono::Local;
 use clap::{CommandFactory, Parser, Subcommand};
 use colored::Colorize;
+use deciduous::context::ContextManager;
 use deciduous::github::{ensure_roadmap_label, GitHubClient};
 use deciduous::roadmap::{
     generate_issue_body, parse_roadmap, write_roadmap_with_metadata, RoadmapSection,
@@ -11,6 +12,7 @@ use deciduous::{
 };
 use std::path::PathBuf;
 use std::process::Command as ProcessCommand;
+use tracing;
 
 #[derive(Parser, Debug)]
 #[command(name = "deciduous")]
@@ -297,6 +299,85 @@ enum Command {
         /// Shell type: bash, zsh, fish, powershell, elvish
         shell: clap_complete::Shell,
     },
+
+    /// Force remove a stale database lock
+    Unlock {
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        force: bool,
+    },
+
+    /// Manage decision graph contexts (multiple databases per project)
+    Context {
+        #[command(subcommand)]
+        action: ContextAction,
+    },
+
+    /// Connect to an ACP agent with deciduous tool injection
+    Acp {
+        /// Agent name from config (e.g., "opencode", "claude-code", "elizacp")
+        #[arg(short, long)]
+        agent: Option<String>,
+
+        /// Command override (e.g., "opencode agent --stdio")
+        #[arg(short, long)]
+        command: Option<String>,
+
+        /// Single prompt to run (non-interactive mode)
+        #[arg(short, long)]
+        prompt: Option<String>,
+
+        /// Run as agent (for editors to spawn deciduous as the agent)
+        #[arg(long)]
+        agent_mode: bool,
+
+        /// Enable trace logging to directory
+        #[arg(long)]
+        trace_dir: Option<PathBuf>,
+
+        /// Log level (error, warn, info, debug, trace)
+        #[arg(long)]
+        log_level: Option<String>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum ContextAction {
+    /// List all contexts in the project
+    List {
+        /// Show detailed information including node counts
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Create a new context
+    Create {
+        /// Name for the new context (e.g., "auth-system", "ui-refactor")
+        name: String,
+
+        /// Auto-generate name from current git branch
+        #[arg(long)]
+        from_branch: bool,
+    },
+
+    /// Switch to a different context
+    Switch {
+        /// Context name to switch to (or "default" for deciduous.db)
+        name: String,
+    },
+
+    /// Delete a context (requires confirmation)
+    Delete {
+        /// Context name to delete
+        name: String,
+
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        force: bool,
+    },
+
+    /// Show current active context
+    Current,
 }
 
 #[derive(Subcommand, Debug)]
@@ -511,6 +592,260 @@ fn main() {
         return;
     }
 
+    // Handle ACP separately - it runs an async runtime
+    if let Command::Acp {
+        agent,
+        command,
+        prompt,
+        agent_mode,
+        trace_dir,
+        log_level,
+    } = args.command
+    {
+        // Parse log level
+        let level = log_level.as_deref().and_then(|s| match s.to_lowercase().as_str() {
+            "error" => Some(tracing::Level::ERROR),
+            "warn" => Some(tracing::Level::WARN),
+            "info" => Some(tracing::Level::INFO),
+            "debug" => Some(tracing::Level::DEBUG),
+            "trace" => Some(tracing::Level::TRACE),
+            _ => {
+                eprintln!("{} Invalid log level '{}'. Use: error, warn, info, debug, trace", "Warning:".yellow(), s);
+                None
+            }
+        });
+
+        let options = deciduous::acp::client::AcpClientOptions {
+            agent_name: agent,
+            command_override: command,
+            prompt,
+            agent_mode,
+            trace_dir,
+            log_level: level,
+        };
+
+        // Create tokio runtime and run the ACP client
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
+        if let Err(e) = rt.block_on(deciduous::acp::run_acp_client(options)) {
+            eprintln!("{} {}", "Error:".red(), e);
+            std::process::exit(1);
+        }
+        return;
+    }
+
+    // Handle unlock separately - needs to work even if DB is locked
+    if let Command::Unlock { force } = args.command {
+        // Find the .deciduous directory
+        let deciduous_dir = std::env::current_dir()
+            .map(|p| p.join(".deciduous"))
+            .unwrap_or_else(|_| PathBuf::from(".deciduous"));
+
+        if !deciduous_dir.exists() {
+            eprintln!(
+                "{} No .deciduous directory found. Run 'deciduous init' first.",
+                "Error:".red()
+            );
+            std::process::exit(1);
+        }
+
+        // Check if there's actually a lock
+        let lock_path = deciduous_dir.join("deciduous.lock");
+        if !lock_path.exists() {
+            println!("{} No lock file found - database is not locked.", "Info:".green());
+            return;
+        }
+
+        // Get lock info
+        let pid = deciduous::lock_info(&deciduous_dir).unwrap_or_else(|| "unknown".to_string());
+
+        if !force {
+            println!("Lock file found:");
+            println!("  Path: {}", lock_path.display());
+            println!("  PID: {}", pid);
+            println!();
+            println!(
+                "{} Are you sure you want to remove this lock? (y/N) ",
+                "Warning:".yellow()
+            );
+
+            use std::io::{self, BufRead};
+            let stdin = io::stdin();
+            let response = stdin.lock().lines().next();
+            match response {
+                Some(Ok(line)) if line.trim().eq_ignore_ascii_case("y") => {}
+                _ => {
+                    println!("Aborted.");
+                    return;
+                }
+            }
+        }
+
+        match deciduous::force_unlock(&deciduous_dir) {
+            Ok(()) => {
+                println!("{} Lock removed successfully.", "Success:".green());
+            }
+            Err(e) => {
+                eprintln!("{} Failed to remove lock: {}", "Error:".red(), e);
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
+
+    // Handle context commands separately - doesn't need the main database open
+    if let Command::Context { action } = &args.command {
+        let manager = match ContextManager::find() {
+            Some(m) => m,
+            None => {
+                eprintln!(
+                    "{} No .deciduous directory found. Run 'deciduous init' first.",
+                    "Error:".red()
+                );
+                std::process::exit(1);
+            }
+        };
+
+        match action {
+            ContextAction::List { verbose } => {
+                let contexts = match manager.list_contexts() {
+                    Ok(c) => c,
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+                };
+
+                let current = manager.current_context().unwrap_or_default();
+
+                if contexts.is_empty() {
+                    println!("No contexts found.");
+                    return;
+                }
+
+                println!("Contexts:");
+                for ctx in contexts {
+                    let marker = if ctx.path == current { "*" } else { " " };
+                    let default_marker = if ctx.is_default { " (default)" } else { "" };
+
+                    if *verbose {
+                        let modified = ctx
+                            .last_modified
+                            .as_deref()
+                            .unwrap_or("unknown");
+                        println!(
+                            "{} {}{} [modified: {}]",
+                            marker, ctx.path, default_marker, modified
+                        );
+                    } else {
+                        println!("{} {}{}", marker, ctx.path, default_marker);
+                    }
+                }
+            }
+
+            ContextAction::Create { name, from_branch } => {
+                let context_name = if *from_branch {
+                    match deciduous::get_current_git_branch() {
+                        Some(branch) => branch.to_lowercase().replace('/', "-"),
+                        None => {
+                            eprintln!(
+                                "{} Could not detect git branch. Specify a name instead.",
+                                "Error:".red()
+                            );
+                            std::process::exit(1);
+                        }
+                    }
+                } else {
+                    name.clone()
+                };
+
+                match manager.create_context(&context_name) {
+                    Ok(path) => {
+                        // Initialize the database by opening it (unlocked since we're just creating)
+                        match Database::open_at_unlocked(&path) {
+                            Ok(_db) => {
+                                println!(
+                                    "{} Created context '{}' at {}",
+                                    "Success:".green(),
+                                    context_name,
+                                    path.display()
+                                );
+                                println!("Switch to it with: deciduous context switch {}", context_name);
+                            }
+                            Err(e) => {
+                                eprintln!("{} Failed to initialize database: {}", "Error:".red(), e);
+                                std::process::exit(1);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+                }
+            }
+
+            ContextAction::Switch { name } => {
+                match manager.switch_context(name) {
+                    Ok(path) => {
+                        println!(
+                            "{} Switched to context '{}' ({})",
+                            "Success:".green(),
+                            name,
+                            path.display()
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+                }
+            }
+
+            ContextAction::Delete { name, force } => {
+                if !*force {
+                    println!(
+                        "{} Are you sure you want to delete context '{}'? This cannot be undone. (y/N) ",
+                        "Warning:".yellow(),
+                        name
+                    );
+
+                    use std::io::{self, BufRead};
+                    let stdin = io::stdin();
+                    let response = stdin.lock().lines().next();
+                    match response {
+                        Some(Ok(line)) if line.trim().eq_ignore_ascii_case("y") => {}
+                        _ => {
+                            println!("Aborted.");
+                            return;
+                        }
+                    }
+                }
+
+                match manager.delete_context(name) {
+                    Ok(()) => {
+                        println!("{} Deleted context '{}'", "Success:".green(), name);
+                    }
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+                }
+            }
+
+            ContextAction::Current => {
+                let current = match manager.current_context() {
+                    Ok(c) => c,
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+                };
+                println!("Current context: {}", current);
+            }
+        }
+        return;
+    }
+
     // Handle completion separately - doesn't need database
     if let Command::Completion { shell } = args.command {
         clap_complete::generate(
@@ -529,6 +864,15 @@ fn main() {
             std::process::exit(1);
         }
     };
+
+    // Show context indicator if not using default
+    if !db.is_default_context() {
+        eprintln!(
+            "{} Using context: {}",
+            "Note:".cyan(),
+            db.context_name().yellow()
+        );
+    }
 
     match args.command {
         Command::Init { .. } => unreachable!(),   // Handled above
@@ -1488,7 +1832,10 @@ fn main() {
         }
 
         Command::Tui { .. } => unreachable!(), // Handled above
+        Command::Unlock { .. } => unreachable!(), // Handled above
+        Command::Context { .. } => unreachable!(), // Handled above
         Command::Completion { .. } => unreachable!(), // Handled above
+        Command::Acp { .. } => unreachable!(), // Handled above
 
         Command::Audit {
             associate_commits,

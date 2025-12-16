@@ -3,6 +3,8 @@
 //! Stores decision graphs and command logs for AI-assisted development.
 //! Uses embedded migrations for schema management.
 
+use crate::context::ContextManager;
+use crate::lock::{acquire_lock, LockError, LockGuard};
 use crate::schema::*;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
@@ -91,9 +93,10 @@ pub fn get_current_git_commit() -> Option<String> {
 }
 
 /// Walk up directory tree to find .deciduous folder (like git finds .git)
-/// Can be overridden with DECIDUOUS_DB_PATH env var
+/// Respects active context from active.json file.
+/// Can be overridden with DECIDUOUS_DB_PATH or DECIDUOUS_CONTEXT env vars.
 fn get_db_path() -> std::path::PathBuf {
-    // Check env var first - always takes priority
+    // DECIDUOUS_DB_PATH takes highest priority - direct path to database
     if let Ok(path) = std::env::var("DECIDUOUS_DB_PATH") {
         return std::path::PathBuf::from(path);
     }
@@ -104,6 +107,21 @@ fn get_db_path() -> std::path::PathBuf {
         loop {
             let deciduous_dir = dir.join(".deciduous");
             if deciduous_dir.exists() && deciduous_dir.is_dir() {
+                // Check for DECIDUOUS_CONTEXT env var override
+                if let Ok(context_name) = std::env::var("DECIDUOUS_CONTEXT") {
+                    let manager = ContextManager::new(deciduous_dir.clone());
+                    return manager.context_db_path(&context_name);
+                }
+
+                // Check active.json for current context
+                if let Some(manager) = ContextManager::find() {
+                    if let Ok(current) = manager.current_context() {
+                        // current is like "deciduous.db" or "contexts/feature.db"
+                        return deciduous_dir.join(&current);
+                    }
+                }
+
+                // Fall back to default
                 return deciduous_dir.join("deciduous.db");
             }
             // Move to parent directory
@@ -604,8 +622,17 @@ type DbPool = Pool<ConnectionManager<SqliteConnection>>;
 type DbConn = PooledConnection<ConnectionManager<SqliteConnection>>;
 
 /// Database connection wrapper with connection pool
+///
+/// Holds an exclusive lock on the database file while open.
+/// The lock is automatically released when the Database is dropped.
 pub struct Database {
     pool: DbPool,
+    /// Path to the database file
+    path: std::path::PathBuf,
+    /// Lock guard - ensures exclusive access to the database.
+    /// Option because open_at_unlocked() skips locking for special cases.
+    #[allow(dead_code)]
+    lock: Option<LockGuard>,
 }
 
 /// Error type for database operations
@@ -615,6 +642,7 @@ pub enum DbError {
     Query(diesel::result::Error),
     Pool(diesel::r2d2::Error),
     Validation(String),
+    Lock(LockError),
 }
 
 impl std::fmt::Display for DbError {
@@ -624,6 +652,7 @@ impl std::fmt::Display for DbError {
             DbError::Query(e) => write!(f, "Query error: {}", e),
             DbError::Pool(e) => write!(f, "Pool error: {}", e),
             DbError::Validation(msg) => write!(f, "{}", msg),
+            DbError::Lock(e) => write!(f, "{}", e),
         }
     }
 }
@@ -642,6 +671,12 @@ impl From<diesel::r2d2::Error> for DbError {
     }
 }
 
+impl From<LockError> for DbError {
+    fn from(e: LockError) -> Self {
+        DbError::Lock(e)
+    }
+}
+
 pub type Result<T> = std::result::Result<T, DbError>;
 
 impl Database {
@@ -650,12 +685,46 @@ impl Database {
         get_db_path()
     }
 
-    /// Create a new database at a custom path
+    /// Get the path to this database
+    pub fn path(&self) -> &std::path::Path {
+        &self.path
+    }
+
+    /// Get the context name for this database
+    ///
+    /// Returns "default" for deciduous.db, or the context name for contexts/*.db
+    pub fn context_name(&self) -> String {
+        let file_name = self.path.file_name().and_then(|s| s.to_str());
+        let parent_name = self
+            .path
+            .parent()
+            .and_then(|p| p.file_name())
+            .and_then(|s| s.to_str());
+
+        match (parent_name, file_name) {
+            (Some("contexts"), Some(name)) => {
+                // Strip .db extension
+                name.strip_suffix(".db").unwrap_or(name).to_string()
+            }
+            (Some(".deciduous"), Some("deciduous.db")) => "default".to_string(),
+            _ => file_name.unwrap_or("unknown").to_string(),
+        }
+    }
+
+    /// Check if this database is the default context
+    pub fn is_default_context(&self) -> bool {
+        self.context_name() == "default"
+    }
+
+    /// Create a new database at a custom path (with locking)
     pub fn new(path: &str) -> Result<Self> {
         Self::open_at(path)
     }
 
     /// Open database at default path (respects DECIDUOUS_DB_PATH env var)
+    ///
+    /// Acquires an exclusive lock on the database. Only one process can
+    /// have the database open at a time.
     pub fn open() -> Result<Self> {
         let path = get_db_path();
         // Create parent directory if it doesn't exist
@@ -667,16 +736,48 @@ impl Database {
         Self::open_at(&path)
     }
 
-    /// Open database at specified path
+    /// Open database at specified path (with locking)
+    ///
+    /// Acquires an exclusive lock on the .deciduous directory containing
+    /// the database file. Only one process can have the database open at a time.
     pub fn open_at<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let path_str = path.as_ref().to_string_lossy().to_string();
+        let path_ref = path.as_ref();
+
+        // Get the .deciduous directory (parent of deciduous.db)
+        let deciduous_dir = path_ref
+            .parent()
+            .ok_or_else(|| DbError::Connection("Invalid database path".to_string()))?;
+
+        // Acquire lock before opening database
+        let lock = acquire_lock(deciduous_dir)?;
+
+        Self::open_at_with_lock(path_ref, Some(lock))
+    }
+
+    /// Open database without acquiring a lock
+    ///
+    /// Use this only for:
+    /// - Tests that need multiple Database instances
+    /// - Read-only operations where locking isn't critical
+    /// - Special tooling that manages its own locking
+    pub fn open_at_unlocked<P: AsRef<Path>>(path: P) -> Result<Self> {
+        Self::open_at_with_lock(path.as_ref(), None)
+    }
+
+    /// Internal: Open database with optional lock guard
+    fn open_at_with_lock(path: &Path, lock: Option<LockGuard>) -> Result<Self> {
+        let path_str = path.to_string_lossy().to_string();
         let manager = ConnectionManager::<SqliteConnection>::new(&path_str);
         let pool = Pool::builder()
             .max_size(5)
             .build(manager)
             .map_err(|e| DbError::Connection(e.to_string()))?;
 
-        let db = Self { pool };
+        let db = Self {
+            pool,
+            path: path.to_path_buf(),
+            lock,
+        };
         // Auto-migrate FIRST - add change_id columns to existing databases before init_schema creates new tables
         let _ = db.migrate_add_change_ids_raw();
         db.init_schema()?;

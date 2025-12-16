@@ -404,6 +404,62 @@ Add the `LIBRARY_PATH` export to your shell profile (`.zshrc` or `.bashrc`) to m
 
 ---
 
+## ACP Client Mode
+
+Connect to any ACP-compliant agent (OpenCode, Claude Code, etc.) with deciduous tool injection.
+
+```bash
+# Connect to OpenCode (built-in default)
+deciduous acp --agent opencode
+
+# Single prompt mode
+deciduous acp --agent opencode --prompt "What files are in this project?"
+
+# Command override for other agents
+deciduous acp --command "claude --acp"
+
+# Interactive session (default if no --prompt)
+deciduous acp --agent opencode
+```
+
+### Built-in Agents
+
+| Agent | Command |
+|-------|---------|
+| `opencode` | `opencode acp` |
+| `claude-code` | `claude --acp` |
+| `elizacp` | `elizacp` (test agent) |
+
+### Custom Configuration
+
+Create `~/.config/deciduous/config.toml` or `.deciduous/config.toml`:
+
+```toml
+[acp]
+default_agent = "opencode"
+
+[acp.agents.my-agent]
+command = "my-agent-binary"
+args = ["--acp", "--some-flag"]
+name = "My Custom Agent"
+
+[acp.agents.my-agent.env]
+API_KEY = "xxx"
+```
+
+### Options
+
+```
+-a, --agent <NAME>           Agent name from config
+-c, --command <CMD>          Command override (e.g., "opencode acp")
+-p, --prompt <TEXT>          Single prompt (non-interactive)
+    --agent-mode             Deciduous becomes the agent (for editors)
+    --trace-dir <DIR>        Enable trace logging
+    --log-level <LEVEL>      Log level (error, warn, info, debug, trace)
+```
+
+---
+
 ## Why "deciduous"?
 
 It almost has the word "decision" in it, and they're trees.

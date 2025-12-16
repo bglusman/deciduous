@@ -38,18 +38,22 @@
 //! println!("Nodes: {}, Edges: {}", graph.nodes.len(), graph.edges.len());
 //! ```
 
+pub mod acp;
 pub mod config;
+pub mod context;
 pub mod db;
 pub mod diff;
 pub mod export;
 pub mod github;
 pub mod init;
+pub mod lock;
 pub mod roadmap;
 pub mod schema;
 pub mod serve;
 pub mod tui;
 
 pub use config::Config;
+pub use context::{ActiveState, ContextError, ContextInfo, ContextManager, ContextSession};
 pub use db::{
     build_metadata_json, get_current_git_branch, get_current_git_commit, CheckboxState, CommandLog,
     Database, DbRecord, DbSummary, DecisionContext, DecisionEdge, DecisionGraph, DecisionNode,
@@ -61,6 +65,7 @@ pub use export::{
     filter_graph_by_ids, filter_graph_from_roots, generate_pr_writeup, graph_to_dot,
     parse_node_range, DotConfig, WriteupConfig,
 };
+pub use lock::{acquire_lock, force_unlock, is_locked, lock_info, LockError, LockGuard};
 
 // Re-export TS trait for downstream use
 #[cfg(feature = "ts-rs")]
