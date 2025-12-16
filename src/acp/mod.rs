@@ -78,6 +78,8 @@
 
 pub mod client;
 pub mod config;
+pub mod tui;
 
 pub use client::run_acp_client;
 pub use config::{AcpConfig, AgentConfig};
+pub use tui::{AcpTui, AgentEvent};

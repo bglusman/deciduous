@@ -338,6 +338,10 @@ enum Command {
         /// Log level (error, warn, info, debug, trace)
         #[arg(long)]
         log_level: Option<String>,
+
+        /// Disable TUI (use simple stdin/stdout)
+        #[arg(long)]
+        no_tui: bool,
     },
 }
 
@@ -600,6 +604,7 @@ fn main() {
         agent_mode,
         trace_dir,
         log_level,
+        no_tui,
     } = args.command
     {
         // Parse log level
@@ -622,6 +627,7 @@ fn main() {
             agent_mode,
             trace_dir,
             log_level: level,
+            no_tui,
         };
 
         // Create tokio runtime and run the ACP client

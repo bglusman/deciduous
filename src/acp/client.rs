@@ -4,7 +4,9 @@
 //! SACP conductor for composable proxy chains.
 
 use crate::acp::config::{AcpConfig, AgentConfig};
+use crate::acp::tui::{AcpTui, AgentEvent};
 use anyhow::Result;
+use crossterm::event::{self, Event};
 use sacp::schema::{
     ContentBlock, EnvVariable, InitializeRequest, NewSessionRequest, PromptRequest,
     RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse,
@@ -15,6 +17,8 @@ use sacp_conductor::{Conductor, McpBridgeMode};
 use sacp_tokio::AcpAgent;
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
+use std::sync::{mpsc, Arc};
+use std::time::Duration;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 /// Options for running the ACP client
@@ -31,6 +35,8 @@ pub struct AcpClientOptions {
     pub trace_dir: Option<PathBuf>,
     /// Log level for stderr output
     pub log_level: Option<tracing::Level>,
+    /// Disable TUI (use simple stdin/stdout)
+    pub no_tui: bool,
 }
 
 impl Default for AcpClientOptions {
@@ -42,6 +48,7 @@ impl Default for AcpClientOptions {
             agent_mode: false,
             trace_dir: None,
             log_level: None,
+            no_tui: false,
         }
     }
 }
@@ -88,8 +95,12 @@ async fn run_client_mode(options: AcpClientOptions) -> Result<()> {
     // If single prompt mode, run non-interactively
     if let Some(prompt) = options.prompt {
         run_single_prompt_simple(agent, &prompt).await
-    } else {
+    } else if options.no_tui {
+        // Simple stdin/stdout mode
         run_interactive_simple(agent).await
+    } else {
+        // Full TUI mode
+        run_interactive_tui(agent, &agent_config).await
     }
 }
 
@@ -211,6 +222,260 @@ async fn run_interactive_simple(agent: AcpAgent) -> Result<()> {
 
     let _ = child.kill().await;
     result.map_err(|e| anyhow::anyhow!("ACP client error: {}", e))
+}
+
+/// TUI-based interactive mode
+async fn run_interactive_tui(agent: AcpAgent, config: &AgentConfig) -> Result<()> {
+    use crate::acp::tui::{restore_terminal, setup_terminal};
+    use sacp::role::ClientToAgent;
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+
+    // Setup terminal
+    let mut terminal = setup_terminal()
+        .map_err(|e| anyhow::anyhow!("Failed to setup terminal: {}", e))?;
+
+    // Create TUI state
+    let mut tui = AcpTui::new();
+
+    // Create channels for communication
+    let (event_tx, event_rx) = mpsc::channel::<AgentEvent>();
+    let (prompt_tx, prompt_rx) = mpsc::channel::<String>();
+    tui.set_event_receiver(event_rx);
+
+    // Spawn the agent process
+    let (agent_stdin, agent_stdout, _stderr, mut child) = agent
+        .spawn_process()
+        .map_err(|e| anyhow::anyhow!("Failed to spawn agent process: {}", e))?;
+
+    let transport = sacp::ByteStreams::new(agent_stdin.compat_write(), agent_stdout.compat());
+
+    // Wrap prompt_rx for async access
+    let prompt_rx = Arc::new(Mutex::new(prompt_rx));
+    let agent_name = config.name.clone().unwrap_or_else(|| config.command.clone());
+    let event_tx_clone = event_tx.clone();
+
+    // Run ACP client in background task
+    let acp_handle = tokio::spawn(async move {
+        let prompt_rx = prompt_rx;
+        let event_tx = event_tx_clone;
+        let agent_name = agent_name;
+
+        // Create notification handler that sends to our channel
+        let event_tx_notif = event_tx.clone();
+
+        let result = ClientToAgent::builder()
+            .name("deciduous-acp-tui")
+            .on_receive_notification(move |notification: SessionNotification, _cx| {
+                let event_tx = event_tx_notif.clone();
+                async move {
+                    handle_tui_notification(notification, &event_tx);
+                    Ok(())
+                }
+            })
+            .on_receive_request(handle_permission_request)
+            .with_client(transport, |cx: JrConnectionCx<ClientToAgent>| {
+                let prompt_rx = prompt_rx.clone();
+                let event_tx = event_tx.clone();
+                let agent_name = agent_name.clone();
+                async move {
+                    run_tui_session(cx, prompt_rx, event_tx, agent_name).await
+                }
+            })
+            .await;
+
+        result
+    });
+
+    // Main TUI event loop
+    let result = run_tui_loop(&mut terminal, &mut tui, &prompt_tx).await;
+
+    // Cleanup
+    let _ = child.kill().await;
+    acp_handle.abort();
+
+    restore_terminal(&mut terminal)
+        .map_err(|e| anyhow::anyhow!("Failed to restore terminal: {}", e))?;
+
+    result
+}
+
+/// Run the TUI event loop
+async fn run_tui_loop(
+    terminal: &mut ratatui::Terminal<ratatui::backend::CrosstermBackend<std::io::Stdout>>,
+    tui: &mut AcpTui,
+    prompt_tx: &mpsc::Sender<String>,
+) -> Result<()> {
+    loop {
+        // Process any pending agent events
+        tui.process_agent_events();
+
+        // Draw the UI
+        terminal.draw(|f| tui.render(f))?;
+
+        // Check for user input with timeout
+        if event::poll(Duration::from_millis(50))? {
+            match event::read()? {
+                Event::Key(key) => {
+                    if let Some(prompt) = tui.on_key(key) {
+                        // User submitted a prompt
+                        let _ = prompt_tx.send(prompt);
+                    }
+                }
+                Event::Mouse(mouse) => {
+                    tui.on_mouse(mouse);
+                }
+                Event::Resize(_, _) => {
+                    // Terminal resized, will redraw on next iteration
+                }
+                _ => {}
+            }
+        }
+
+        if tui.should_quit() {
+            break;
+        }
+    }
+
+    Ok(())
+}
+
+/// Handle notifications and send events to TUI
+fn handle_tui_notification(notification: SessionNotification, event_tx: &mpsc::Sender<AgentEvent>) {
+    match &notification.update {
+        SessionUpdate::AgentMessageChunk(chunk) => {
+            if let Some(text) = extract_text(&chunk.content) {
+                let _ = event_tx.send(AgentEvent::TextChunk(text));
+            }
+        }
+        SessionUpdate::AgentThoughtChunk(chunk) => {
+            if let Some(text) = extract_text(&chunk.content) {
+                let _ = event_tx.send(AgentEvent::ThoughtChunk(text));
+            }
+        }
+        SessionUpdate::ToolCall(tool_call) => {
+            let _ = event_tx.send(AgentEvent::ToolCallStart {
+                id: tool_call.id.to_string(),
+                title: tool_call.title.clone(),
+            });
+        }
+        SessionUpdate::ToolCallUpdate(update) => {
+            if let Some(status) = &update.fields.status {
+                let status_str = match status {
+                    ToolCallStatus::Pending => "pending",
+                    ToolCallStatus::InProgress => "in_progress",
+                    ToolCallStatus::Completed => "completed",
+                    ToolCallStatus::Failed => "failed",
+                };
+
+                if *status == ToolCallStatus::Completed {
+                    let result = update.fields.content.as_ref()
+                        .and_then(|c| c.first())
+                        .map(|item| match item {
+                            sacp::schema::ToolCallContent::Content { content } => {
+                                extract_text(content).unwrap_or_default()
+                            }
+                            _ => String::new(),
+                        })
+                        .unwrap_or_default();
+
+                    let _ = event_tx.send(AgentEvent::ToolCallComplete {
+                        id: update.id.to_string(),
+                        result,
+                    });
+                } else {
+                    let _ = event_tx.send(AgentEvent::ToolCallUpdate {
+                        id: update.id.to_string(),
+                        status: status_str.to_string(),
+                    });
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Extract text from a ContentBlock
+fn extract_text(block: &ContentBlock) -> Option<String> {
+    match block {
+        ContentBlock::Text(text) => Some(text.text.clone()),
+        _ => None,
+    }
+}
+
+/// Run the TUI session - handles initialization and prompt loop
+async fn run_tui_session(
+    cx: JrConnectionCx<sacp::role::ClientToAgent>,
+    prompt_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<String>>>,
+    event_tx: mpsc::Sender<AgentEvent>,
+    agent_name: String,
+) -> Result<(), sacp::Error> {
+    // Send initializing event
+    let _ = event_tx.send(AgentEvent::Initializing);
+
+    // Initialize the agent
+    let init_response = cx
+        .send_request(InitializeRequest {
+            protocol_version: PROTOCOL_VERSION,
+            client_capabilities: Default::default(),
+            client_info: Default::default(),
+            meta: None,
+        })
+        .block_task()
+        .await?;
+
+    let name = init_response
+        .agent_info
+        .as_ref()
+        .map(|i| i.name.clone())
+        .unwrap_or(agent_name);
+
+    let _ = event_tx.send(AgentEvent::Initialized(name));
+
+    // Create session
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
+    let session_response = cx
+        .send_request(NewSessionRequest {
+            mcp_servers: vec![],
+            cwd,
+            meta: None,
+        })
+        .block_task()
+        .await?;
+
+    let session_id = session_response.session_id.clone();
+    let _ = event_tx.send(AgentEvent::SessionCreated(session_id.to_string()));
+
+    // Prompt loop - wait for prompts from TUI
+    loop {
+        // Check for new prompts (non-blocking with small sleep)
+        let prompt = {
+            let rx = prompt_rx.lock().await;
+            rx.try_recv().ok()
+        };
+
+        if let Some(prompt) = prompt {
+            // Send the prompt to the agent
+            let _response = cx
+                .send_request(PromptRequest {
+                    session_id: session_id.clone(),
+                    prompt: vec![ContentBlock::Text(TextContent {
+                        text: prompt,
+                        annotations: None,
+                        meta: None,
+                    })],
+                    meta: None,
+                })
+                .block_task()
+                .await?;
+
+            // Signal message complete
+            let _ = event_tx.send(AgentEvent::MessageComplete);
+        }
+
+        // Small delay to prevent busy loop
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
 }
 
 /// Simpler single-prompt mode
