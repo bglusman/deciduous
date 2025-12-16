@@ -6841,6 +6841,72 @@
       "created_at": "2025-12-15T22:50:20.768221-05:00",
       "updated_at": "2025-12-15T22:50:20.768221-05:00",
       "metadata_json": "{\"branch\":\"main\",\"confidence\":100}"
+    },
+    {
+      "id": 624,
+      "change_id": "93418f1a-970b-4671-9cea-77e400df6786",
+      "node_type": "action",
+      "title": "Released v0.8.13",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T22:51:23.475706-05:00",
+      "updated_at": "2025-12-15T22:51:23.475706-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"2cca5b3\",\"confidence\":100}"
+    },
+    {
+      "id": 625,
+      "change_id": "0e3cc3ab-85ab-43a1-a276-5e25ffd09d2a",
+      "node_type": "decision",
+      "title": "Handle git-history.json in external repo mode",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T22:53:12.156204-05:00",
+      "updated_at": "2025-12-15T22:53:12.156204-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90,\"prompt\":\"When commit_repo is configured, sync was overwriting git-history.json with empty array\"}"
+    },
+    {
+      "id": 626,
+      "change_id": "ceb888c0-d066-4dcc-b1a9-4218732fe00e",
+      "node_type": "option",
+      "title": "Skip export_git_history when external repo configured (chosen)",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T22:53:18.956598-05:00",
+      "updated_at": "2025-12-15T22:53:18.956598-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95,\"prompt\":\"Preserve existing file, show helpful message\"}"
+    },
+    {
+      "id": 627,
+      "change_id": "36ce1b43-416f-4180-b53f-fa3eaa15d10c",
+      "node_type": "option",
+      "title": "Try to fetch from external repo API",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T22:53:18.973530-05:00",
+      "updated_at": "2025-12-15T22:53:18.973530-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":40,\"prompt\":\"Complex, requires auth, rate limits\"}"
+    },
+    {
+      "id": 628,
+      "change_id": "a4420170-c21e-4931-8a09-289bb5242812",
+      "node_type": "action",
+      "title": "Implement git-history preservation for external repos",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T22:53:18.989675-05:00",
+      "updated_at": "2025-12-15T22:53:18.989675-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"093ebce\",\"confidence\":95,\"prompt\":\"PR #118: Check include_config flag, skip regeneration, print Preserved message\"}"
+    },
+    {
+      "id": 629,
+      "change_id": "fab08f36-b441-4bd0-a5f8-c216592a8325",
+      "node_type": "outcome",
+      "title": "v0.8.13 released with external repo git-history fix",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T22:53:25.618460-05:00",
+      "updated_at": "2025-12-15T22:53:25.618460-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":99,\"prompt\":\"PR #118 merged, deciduous sync now preserves git-history.json in external repo mode\"}"
     }
   ],
   "edges": [
@@ -12805,6 +12871,50 @@
       "weight": 1.0,
       "rationale": "Follow-up fix for external repo feature",
       "created_at": "2025-12-15T22:50:28.338687-05:00"
+    },
+    {
+      "id": 543,
+      "from_node_id": 625,
+      "to_node_id": 626,
+      "from_change_id": "0e3cc3ab-85ab-43a1-a276-5e25ffd09d2a",
+      "to_change_id": "ceb888c0-d066-4dcc-b1a9-4218732fe00e",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Chosen approach - simple and effective",
+      "created_at": "2025-12-15T22:53:25.577530-05:00"
+    },
+    {
+      "id": 544,
+      "from_node_id": 625,
+      "to_node_id": 627,
+      "from_change_id": "0e3cc3ab-85ab-43a1-a276-5e25ffd09d2a",
+      "to_change_id": "36ce1b43-416f-4180-b53f-fa3eaa15d10c",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Considered but rejected - too complex",
+      "created_at": "2025-12-15T22:53:25.588512-05:00"
+    },
+    {
+      "id": 545,
+      "from_node_id": 626,
+      "to_node_id": 628,
+      "from_change_id": "ceb888c0-d066-4dcc-b1a9-4218732fe00e",
+      "to_change_id": "a4420170-c21e-4931-8a09-289bb5242812",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation of chosen approach",
+      "created_at": "2025-12-15T22:53:25.597364-05:00"
+    },
+    {
+      "id": 546,
+      "from_node_id": 628,
+      "to_node_id": 629,
+      "from_change_id": "a4420170-c21e-4931-8a09-289bb5242812",
+      "to_change_id": "fab08f36-b441-4bd0-a5f8-c216592a8325",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Fix shipped",
+      "created_at": "2025-12-15T22:53:25.625644-05:00"
     }
   ]
 }
