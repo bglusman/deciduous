@@ -6,8 +6,8 @@ use deciduous::roadmap::{
     generate_issue_body, parse_roadmap, write_roadmap_with_metadata, RoadmapSection,
 };
 use deciduous::{
-    filter_graph_by_ids, generate_pr_writeup, graph_to_dot, parse_node_range, Database, DotConfig,
-    WriteupConfig,
+    filter_graph_by_ids, generate_pr_writeup, graph_to_dot, parse_node_range, Config, Database,
+    DotConfig, WriteupConfig,
 };
 use std::path::PathBuf;
 use std::process::Command as ProcessCommand;
@@ -748,7 +748,11 @@ fn main() {
                 std::fs::create_dir_all(parent).ok();
             }
 
-            match db.get_graph() {
+            // Load config and include it in export (for external repo support, etc.)
+            let config = Config::load();
+            let include_config = config.github.commit_repo.is_some();
+
+            match db.get_graph_with_config(if include_config { Some(config) } else { None }) {
                 Ok(graph) => {
                     match serde_json::to_string_pretty(&graph) {
                         Ok(json) => {
